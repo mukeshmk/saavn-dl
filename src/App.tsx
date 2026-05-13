@@ -71,19 +71,6 @@ export default function App() {
         >
           <div className="flex items-center justify-center gap-3 mb-3">
             {/* Logo mark */}
-            <div className="w-9 h-9 rounded-xl bg-cyan/10 border border-cyan/20 flex items-center justify-center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M9 18V5l12-2v13"
-                  stroke="#00d4ff"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="6" cy="18" r="3" stroke="#00d4ff" strokeWidth="1.5" />
-                <circle cx="18" cy="16" r="3" stroke="#00d4ff" strokeWidth="1.5" />
-              </svg>
-            </div>
             <h1 className="text-2xl font-display font-bold text-text-primary tracking-tight">
               saavn<span className="text-cyan">-dl</span>
             </h1>
