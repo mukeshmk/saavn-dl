@@ -106,7 +106,18 @@ export default function TrackCard({ song }: TrackCardProps) {
 
             {/* Preview */}
             <div className="mt-3">
-              <AudioPreview vlink={more_info.vlink} title={song.title} />
+               {more_info?.vlink?.trim() ? (
+                  <AudioPreview
+                  vlink={more_info.vlink}
+                  title={song.title}
+             />
+          ) : (
+            <div className="rounded-2xl border border-border bg-glass px-4 py-3 text-center">
+              <p className="text-sm text-text-muted">
+                 Preview not available for this track
+                      </p>
+                  </div>
+                  )}
             </div>
           </div>
         </div>
