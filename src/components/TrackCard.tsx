@@ -92,7 +92,13 @@ export default function TrackCard({ song }: TrackCardProps) {
                 )}
               </div>
 
-              <p className="mt-1 text-sm text-text-secondary font-body truncate">{primaryArtists}</p>
+              <p className="mt-1 text-sm text-text-secondary font-body truncate">
+                    {
+                    song.subtitle
+                    ?.split(' - ')[0]
+                    ?.trim() || primaryArtists
+                   }
+              </p>
 
               <div className="mt-2 flex items-center gap-3 flex-wrap">
                 <MetaChip icon="💿" label={more_info.album} />

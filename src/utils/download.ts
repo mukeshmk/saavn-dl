@@ -63,7 +63,18 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   await ff.writeFile('input.mp4', await fetchFile(audioBlob));
 
   // Build ffmpeg args
-  const primaryArtists = more_info.artists.primary.map((a) => a.name).join(', ');
+  const fallbackArtists =
+  more_info.artists.primary
+    ?.map((a) => a.name)
+    .join(', ') || 'Unknown Artist';
+
+  const subtitleArtists =
+  song.subtitle
+    ?.split(' - ')[0]
+    ?.trim();
+
+  const artistTag =
+  subtitleArtists || fallbackArtists;
   const title = song.title;
   const album = more_info.album;
   const year = song.year;
@@ -81,10 +92,11 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   args.push(
     '-c:a', 'copy',
     '-metadata', `title=${title}`,
-    '-metadata', `artist=${primaryArtists}`,
+    '-metadata', `artist=${artistTag}`,
+    '-metadata', `album_artist=${fallbackArtists}`,
     '-metadata', `album=${album}`,
     '-metadata', `date=${year}`,
-    '-metadata', `comment=Downloaded via saavn-dl`,
+    '-metadata', `comment=Downloaded via saavn-dl / Rhythmax`,
     'output.mp4'
   );
 
@@ -110,7 +122,7 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
     // ignore cleanup errors
   }
 
-  const filename = sanitizeFilename(`${title} - ${primaryArtists}`) + '.m4a';
+  const filename = sanitizeFilename(`${title} - ${artistTag}`) + '.m4a';
   triggerDownload(outputBlob, filename);
 
   onProgress?.('Done!', 100);
@@ -121,8 +133,19 @@ export async function downloadDirect(song: SaavnSong, quality: string): Promise<
   const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
   const audioUrl = getQualityUrl(decrypted, quality);
 
-  const primaryArtists = more_info.artists.primary.map((a) => a.name).join(', ');
-  const filename = sanitizeFilename(`${song.title} - ${primaryArtists}`) + '.mp4';
+  const fallbackArtists =
+  more_info.artists.primary
+    ?.map((a) => a.name)
+    .join(', ') || 'Unknown Artist';
+
+  const subtitleArtists =
+  song.subtitle
+    ?.split(' - ')[0]
+    ?.trim();
+
+  const artistTag =
+  subtitleArtists || fallbackArtists;
+  const filename = sanitizeFilename(`${song.title} - ${artistTag}`) + '.mp4';
 
   // Fetch and trigger download
   const resp = await fetch(audioUrl);
