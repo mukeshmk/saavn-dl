@@ -6,16 +6,21 @@ import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from './decrypt';
 let ffmpegInstance: FFmpeg | null = null;
 let ffmpegLoaded = false;
 
-async function getFFmpeg(): Promise<FFmpeg> {
+export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpegInstance && ffmpegLoaded) return ffmpegInstance;
 
   ffmpegInstance = new FFmpeg();
 
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+  const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+
+  console.time('ffmpeg-load');
+
   await ffmpegInstance.load({
     coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
     wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
   });
+
+  console.timeEnd('ffmpeg-load');
 
   ffmpegLoaded = true;
   return ffmpegInstance;
@@ -102,7 +107,11 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
 
   onProgress?.('Embedding metadata…', 75);
 
+  console.time('ffmpeg-exec');
+
   await ff.exec(args);
+
+  console.timeEnd('ffmpeg-exec');
 
   onProgress?.('Preparing download…', 90);
 

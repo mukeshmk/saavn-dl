@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
+import { getFFmpeg } from './utils/download';
 import { motion, AnimatePresence } from 'framer-motion';
 import URLInput from './components/URLInput';
 import TrackCard from './components/TrackCard';
@@ -13,6 +15,9 @@ export default function App() {
   const [fetchState, setFetchState] = useState<FetchState>('idle');
   const [song, setSong] = useState<SaavnSong | null>(null);
   const [error, setError] = useState('');
+  useEffect(() => {
+  getFFmpeg().catch(console.error);
+  }, []);
 
   const handleFetch = async (url: string) => {
     setFetchState('loading');
