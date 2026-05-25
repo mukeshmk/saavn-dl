@@ -100,7 +100,7 @@ export default function AudioPreview({ vlink, title }: AudioPreviewProps) {
             <path d="M5 3l14 9-14 9V3z" />
           )}
         </svg>
-        {isOpen ? (isPlaying ? 'Pause' : 'Resume') : 'Preview'}
+        {isOpen ? 'Close' : 'Preview'}
       </motion.button>
 
       <AnimatePresence>

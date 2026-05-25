@@ -15,9 +15,19 @@ export default function App() {
   const [fetchState, setFetchState] = useState<FetchState>('idle');
   const [song, setSong] = useState<SaavnSong | null>(null);
   const [error, setError] = useState('');
+  const [showUpdates, setShowUpdates] = useState(false);
+  const [updates, setUpdates] = useState<any[]>([]);
+
   useEffect(() => {
   getFFmpeg().catch(console.error);
   }, []);
+
+  useEffect(() => {
+  fetch('/updates.json')
+    .then((res) => res.json())
+    .then(setUpdates)
+    .catch(console.error);
+}, []);
 
   const handleFetch = async (url: string) => {
     setFetchState('loading');
@@ -160,8 +170,6 @@ export default function App() {
           </AnimatePresence>
         </div>
       
-
-        {/* Footer */}
         {/* Footer */}
 <motion.div
   initial={{ opacity: 0, y: 10 }}
@@ -204,6 +212,71 @@ export default function App() {
       <path d="M20.222 4.779a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.078.037c-.211.375-.444.864-.608 1.249a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.249.077.077 0 0 0-.078-.037 19.736 19.736 0 0 0-4.885 1.515.07.07 0 0 0-.032.027C.533 9.046-.32 13.17.099 17.243a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.027 13.83 13.83 0 0 0 1.226-1.994.076.076 0 0 0-.041-.105 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.04.106c.36.698.771 1.364 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .031-.055c.5-4.708-.838-8.795-3.548-12.433a.061.061 0 0 0-.031-.028zM8.02 14.307c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.095 2.157 2.418 0 1.334-.947 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.095 2.157 2.418 0 1.334-.947 2.419-2.157 2.419z" />
     </svg>
   </a>
+
+{/* Updates / Info */}
+<button
+  onClick={() => setShowUpdates(true)}
+  className="relative w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200"
+  aria-label="Updates"
+>
+
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </svg>
+</button>
+{/* Updates Modal */}
+{showUpdates && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-display font-bold text-text-primary">
+          Updates
+        </h2>
+
+        <button
+          onClick={() => setShowUpdates(false)}
+          className="text-text-muted hover:text-white transition-colors"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+        {updates.map((update) => (
+          <div
+            key={update.id}
+            className="rounded-2xl border border-border bg-glass p-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-text-primary">
+                {update.title}
+              </p>
+
+              <span className="text-[10px] font-mono text-cyan/80">
+                {update.date}
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-text-white/90">
+              {update.content}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
 </motion.div>
       </div>
     </div>

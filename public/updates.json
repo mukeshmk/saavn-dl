@@ -1,0 +1,8 @@
+[
+  {
+    "id": 1,
+    "title": "FFMpeg Update",
+    "date": "25-05-2026",
+    "content": "If you encounter any issues with FFMpeg while loading or embedding metadata, please switch to direct mode. I'm working on a fix for this issue."
+  }
+]
