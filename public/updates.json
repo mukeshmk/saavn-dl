@@ -1,5 +1,11 @@
 [
     {
+    "id": 2,
+    "title": "Search Feature Coming Soon!",
+    "date": "26-05-2026",
+    "content": "I know that many users outside India are facing issues when trying to get access to jiosaavn.com because JioSaavn is only available in India. I'm gonna implement search feature here within next few days so you can just search songs here. No more need to copy links from jiosaavn.com. Stay tuned! Quick solution for now: Use VPN and set location to India, then you can access jiosaavn.com and copy links from there."
+    },
+    {
     "id": 1,
     "title": "FFMpeg Update",
     "date": "25-05-2026",
