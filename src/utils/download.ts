@@ -47,9 +47,19 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 function getArtistTag(song: SaavnSong): string {
-  const fromPrimary = song.more_info.artists?.primary?.map((a) => a.name).join(', ');
-  const fromSubtitle = song.subtitle?.split(' - ')[0]?.trim();
-  return fromPrimary || fromSubtitle || 'Unknown Artist';
+  const fromSubtitle = song.subtitle
+    ?.split(' - ')[0]
+    ?.trim();
+
+  if (fromSubtitle) {
+    return fromSubtitle;
+  }
+
+  const fromPrimary = song.more_info.artists?.primary
+    ?.map((a) => a.name)
+    .join(', ');
+
+  return fromPrimary || 'Unknown Artist';
 }
 
 function getImageUrl(song: SaavnSong): string {
