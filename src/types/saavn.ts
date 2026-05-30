@@ -53,3 +53,55 @@ export const QUALITY_OPTIONS: QualityOption[] = [
   { value: '160', label: '160 kbps', tag: 'High' },
   { value: '320', label: '320 kbps', tag: 'MAX' },
 ];
+
+export interface SearchResult {
+  id: string;
+  token: string;
+  title: string;
+  subtitle: string;
+  type: string;
+  perma_url: string;
+  image: string;
+  language?: string;
+  year?: string;
+  play_count?: string;
+  isExplicit?: boolean;
+
+  more_info?: {
+    duration?: string;
+    album?: string;
+    encrypted_media_url?: string;
+  };
+}
+
+export function extractArtistFromSubtitle(subtitle: string) {
+  return subtitle?.split(' - ')[0]?.trim() || 'Unknown Artist';
+}
+
+export function formatDuration(sec?: string) {
+  if (!sec) return '';
+
+  const total = Number(sec);
+
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+export function searchImage(url: string) {
+  if (!url) return "";
+
+  const image50 = url.replace(
+    /150x150|500x500/g,
+    "50x50"
+  );
+
+  return `https://js-odskyler.vercel.app/api/image?url=${encodeURIComponent(image50)}`;
+}
+
+export function isSaavnUrl(value: string) {
+  return /^https?:\/\/(www\.)?jiosaavn\.com\/.+/i.test(
+    value.trim()
+  );
+}

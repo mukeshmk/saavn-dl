@@ -1,5 +1,11 @@
 [
-    {
+  {
+    "id": 3,
+    "title": "Search feature is here!",
+    "date": "30-05-2026",
+    "content": "Finally, The search feature is here! You can now search songs directly in saavn-dl! Simply type the song name in the search bar and hit enter. No more need to copy links from jiosaavn.com. You can still paste links if you are unable to find the song in search results. Note: Search results are fetched from jiosaavn.com, so if a song is not available on jiosaavn.com, it won't appear in search results here. If you face any issues, please let me know on GitHub/Discord. Enjoy the new feature!"
+  },
+  {
     "id": 2,
     "title": "Search Feature Coming Soon!",
     "date": "26-05-2026",

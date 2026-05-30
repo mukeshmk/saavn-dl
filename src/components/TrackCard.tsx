@@ -92,7 +92,7 @@ export default function TrackCard({ song }: TrackCardProps) {
                 )}
               </div>
 
-              <p className="mt-1 text-sm text-text-secondary font-body truncate">
+              <p className="mt-1 text-sm text-white/60 font-body truncate">
                     {
                     song.subtitle
                     ?.split(' - ')[0]
@@ -119,7 +119,7 @@ export default function TrackCard({ song }: TrackCardProps) {
              />
           ) : (
             <div className="rounded-2xl border border-border bg-glass px-4 py-3 text-center">
-              <p className="text-sm text-text-muted">
+              <p className="text-sm text-white/50">
                  Preview not available for this track
                       </p>
                   </div>
@@ -135,7 +135,7 @@ export default function TrackCard({ song }: TrackCardProps) {
       {/* Quality + Download */}
       <div className="p-5 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider">Quality</span>
+          <span className="text-[11px] font-mono text-white/80 uppercase tracking-wider">Quality</span>
           <QualitySelector selected={quality} onChange={setQuality} />
         </div>
 
@@ -148,7 +148,7 @@ export default function TrackCard({ song }: TrackCardProps) {
           href={song.perma_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-[11px] font-mono text-text-muted hover:text-cyan transition-colors"
+          className="flex items-center gap-1.5 text-[11px] font-mono text-white/60 hover:text-cyan transition-colors"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -157,8 +157,8 @@ export default function TrackCard({ song }: TrackCardProps) {
           </svg>
           Open on JioSaavn
         </a>
-        <span className="text-text-muted/30 text-[11px]">·</span>
-        <span className="text-[11px] font-mono text-text-muted">{more_info.copyright_text}</span>
+        <span className="text-white/30 text-[11px]">·</span>
+        <span className="text-[11px] font-mono text-white/40">{more_info.copyright_text}</span>
       </div>
     </motion.div>
   );
