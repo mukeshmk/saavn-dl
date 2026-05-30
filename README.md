@@ -1,6 +1,6 @@
 # saavn-dl
 
-A clean modern frontend for downloading songs from JioSaavn.
+A modern JioSaavn downloader and search client with ffmpeg-powered metadata embedding.
 
 Built with React, Vite and TypeScript.  
 Designed with a premium glassmorphism-inspired UI.
@@ -14,13 +14,17 @@ Designed with a premium glassmorphism-inspired UI.
 ### Track view
 
 ![saavn-dl Track view](./assets/track.png)
+
+### Search view
+![saavn-dl Search](./assets/search.png)
 ---
 
 ## Features
 
-- 🔗 Paste any JioSaavn song URL
+- 🔗 Paste any JioSaavn song URL or just search by track name
 - 🎵 Built-in audio preview player
-- 🔓 Client-side DES ECB decryption
+- 🔍 Songs search support
+- 📢 Built-in updates modal
 - 🎚️ Quality selector:
   - 12 kbps
   - 48 kbps
@@ -141,6 +145,26 @@ The decrypted media URL is dynamically modified depending on selected quality.
 |------|-------------|
 | ⚡ Fast | Direct download without metadata embedding |
 | ✨ Enhanced | Downloads audio and embeds metadata using ffmpeg.wasm |
+
+---
+
+## Search API
+
+Search requests are powered by OD Skyler JioSaavn API
+
+```txt
+https://js-odskyler.vercel.app/api/songs?q=
+
+---
+
+## Image Proxy
+
+Because `ffmpeg.wasm` requires COEP/COOP isolation, external images from JioSaavn CDN cannot be loaded directly in the browser.
+
+The app uses js-odskyler.vercel.app image proxy endpoint:
+
+```txt
+/api/image?url=
 
 ---
 
