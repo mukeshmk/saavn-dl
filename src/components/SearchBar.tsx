@@ -180,7 +180,7 @@ export default function SearchBar({ onUrlFetch, onSearch, isLoading }: SearchBar
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="text-[11px] text-violet-400/60 font-mono pl-1"
+            className="text-[11px] text-white/60 font-mono pl-1"
           >
             Press Enter or click Search
           </motion.p>

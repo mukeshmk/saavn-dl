@@ -37,7 +37,7 @@ export default function SearchResults({
         >
           <div className="flex items-center gap-2 mb-3">
             <span className="w-3 h-3 border border-violet-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <span className="text-[11px] font-mono text-violet-400/80 truncate">
+            <span className="text-[11px] font-mono text-white/60 truncate">
               Searching for "{query}"…
             </span>
           </div>
@@ -80,10 +80,10 @@ export default function SearchResults({
           className="text-center py-12"
         >
           <p className="text-3xl mb-3">🎵</p>
-          <p className="text-sm font-display font-semibold text-text-secondary">
+          <p className="text-sm font-display font-semibold text-white/80">
             No results for "{query}"
           </p>
-          <p className="text-xs font-mono text-text-muted mt-1.5">Try different keywords</p>
+          <p className="text-xs font-mono text-white/60 mt-1.5">Try different keywords</p>
         </motion.div>
       )}
 
@@ -103,10 +103,10 @@ export default function SearchResults({
             className="flex items-center justify-between mb-3"
           >
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider flex-shrink-0">
+              <span className="text-[11px] font-mono text-white/60 uppercase tracking-wider flex-shrink-0">
                 Results for
               </span>
-              <span className="text-[11px] font-mono text-violet-400 truncate">
+              <span className="text-[11px] font-mono text-cyan truncate">
                 "{query}"
               </span>
             </div>
