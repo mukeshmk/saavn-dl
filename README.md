@@ -154,7 +154,7 @@ Search requests are powered by OD Skyler JioSaavn API
 
 ```txt
 https://js-odskyler.vercel.app/api/songs?q=
-
+```
 ---
 
 ## Image Proxy
@@ -165,7 +165,7 @@ The app uses js-odskyler.vercel.app image proxy endpoint:
 
 ```txt
 /api/image?url=
-
+```
 ---
 
 ## Disclaimer
