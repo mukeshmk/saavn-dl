@@ -61,7 +61,7 @@ export default function SearchBar({ onUrlFetch, onSearch, isLoading }: SearchBar
     focused && mode === 'url'
       ? '0 0 0 1px rgba(0,212,255,0.45), 0 0 24px rgba(0,212,255,0.1)'
       : focused
-      ? '0 0 0 1px rgba(139,107,255,0.45), 0 0 24px rgba(139,107,255,0.08)'
+      ? '0 0 0 1px rgba(3, 252, 244,0.45), 0 0 24px rgba(139,107,255,0.08)'
       : '0 0 0 1px rgba(255,255,255,0.06)';
 
   return (

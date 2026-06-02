@@ -64,14 +64,7 @@ export default function SearchResultCard({
           </div>
         )}
 
-        {/* Hover play overlay — hidden while loading */}
-        {!isLoading && (
-          <div className="absolute inset-0 bg-violet-700/80 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
-              <path d="M5 3l14 9-14 9V3z" />
-            </svg>
-          </div>
-        )}
+        
 
         {/* Loading spinner overlay */}
         {isLoading && (
