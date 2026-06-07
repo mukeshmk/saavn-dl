@@ -64,8 +64,6 @@ export default function SearchResultCard({
           </div>
         )}
 
-        
-
         {/* Loading spinner overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-void/60 rounded-lg flex items-center justify-center">
