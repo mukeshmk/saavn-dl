@@ -36,10 +36,10 @@ export default function SearchResultCard({
       disabled={anyLoading}
       className={`group w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
         isLoading
-          ? 'border-violet-500/40 bg-violet-500/5 cursor-wait'
+          ? 'border-cyan-500/40 bg-cyan-500/5 cursor-wait'
           : anyLoading
           ? 'border-border bg-glass cursor-not-allowed'
-          : 'border-border bg-glass hover:border-violet-500/40 hover:bg-violet-500/5 cursor-pointer active:scale-[0.99]'
+          : 'border-border bg-glass hover:border-cyan-500/40 hover:bg-cyan-500/5 cursor-pointer active:scale-[0.99]'
       }`}
     >
       {/* Album art thumbnail */}
@@ -67,7 +67,7 @@ export default function SearchResultCard({
         {/* Loading spinner overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-void/60 rounded-lg flex items-center justify-center">
-            <span className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+            <span className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
       </div>

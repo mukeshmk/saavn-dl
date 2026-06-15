@@ -62,7 +62,7 @@ export default function TrackCard({ song }: TrackCardProps) {
                 />
               )}
               {imgError && (
-                <div className="w-full h-full flex items-center justify-center text-text-muted">
+                <div className="w-full h-full flex items-center justify-center text-white/60">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
                     <circle cx="12" cy="12" r="10" />
                     <circle cx="12" cy="12" r="3" />

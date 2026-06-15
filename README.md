@@ -1,6 +1,6 @@
 # saavn-dl
 
-A modern JioSaavn downloader and search client with ffmpeg-powered metadata embedding.
+A modern JioSaavn songs & albumsdownloader and with ffmpeg powered metadata embedding.
 
 Built with React, Vite and TypeScript.  
 Designed with a premium glassmorphism-inspired UI.
@@ -11,32 +11,31 @@ Designed with a premium glassmorphism-inspired UI.
 ### Home
 ![saavn-dl Home](./assets/home.png)
 
-### Track view
+### Track
 
 ![saavn-dl Track view](./assets/track.png)
 
-### Search view
-![saavn-dl Search](./assets/search.png)
+### Search
+![saavn-dl Track search](./assets/search.png)
+
+### Album search
+![saavn-dl Album search](./assets/albumSearch.png)
+
+### Album
+![saavn-dl Album view](./assets/album.png)
+
+### Download Menu
+![saavn-dl Download menu](./assets/downloadMenu.png)
 ---
 
 ## Features
 
-- 🔗 Paste any JioSaavn song URL or just search by track name
+- 🔗 Paste any JioSaavn song/album URL or just search by track/album name
 - 🎵 Built-in audio preview player
-- 🔍 Songs search support
+- 🔍 Songs & albums search support
 - 📢 Built-in updates modal
-- 🎚️ Quality selector:
-  - 12 kbps
-  - 48 kbps
-  - 96 kbps
-  - 160 kbps
-  - 320 kbps
-- ⬇️ Download with embedded metadata:
-  - title
-  - artists
-  - album
-  - year
-  - cover art
+- 🎚️ Quality selector upto 320 kbps
+- ⬇️ Download tracks & albums with embedded metadata:
 - ⚡ Direct download fallback if ffmpeg fails
 - 🌑 Dark glassmorphism UI
 - 📱 Responsive layout
@@ -153,7 +152,8 @@ The decrypted media URL is dynamically modified depending on selected quality.
 Search requests are powered by OD Skyler JioSaavn API
 
 ```txt
-https://js-odskyler.vercel.app/api/songs?q=
+https://js-odskyler.vercel.app/api/songs?q={query}
+https://js-odskyler.vercel.app/api/albums?q={query}
 ```
 ---
 

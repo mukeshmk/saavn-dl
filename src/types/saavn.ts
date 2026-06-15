@@ -105,3 +105,85 @@ export function isSaavnUrl(value: string) {
     value.trim()
   );
 }
+// ─── Album types ──────────────────────────────────────────────────────────────
+
+export interface AlbumArtist {
+  id: string;
+  artist_token?: string;
+  name: string;
+  image?: string;
+  perma_url: string;
+}
+
+export interface AlbumSearchResult {
+  id: string;
+  token: string;
+  title: string;
+  subtitle: string;
+  type: 'album';
+  perma_url: string;
+  image: string;
+  language: string;
+  year: string;
+  play_count: string;
+  isExplicit: boolean;
+  more_info: {
+    song_count: string;
+    artists: {
+      primary: AlbumArtist[];
+      featured: AlbumArtist[];
+    };
+  };
+}
+
+export interface AlbumDetail {
+  id: string;
+  token: string;
+  title: string;
+  subtitle: string;
+  header_desc: string;
+  type: 'album';
+  perma_url: string;
+  image: string;
+  language: string;
+  year: string;
+  song_count: string;
+  isExplicit: boolean;
+  copyright: string;
+  artists: {
+    primary: AlbumArtist[];
+    featured: AlbumArtist[];
+  };
+  songs: SaavnSong[];
+}
+
+/** Image proxy — always goes through the Vercel proxy */
+export function proxyImage(url: string, size: '50x50' | '150x150' | '500x500' = '150x150'): string {
+  if (!url) return '';
+  const sized = url.replace(/\d+x\d+/, size).replace('http://', 'https://');
+  return `https://js-odskyler.vercel.app/api/image?url=${encodeURIComponent(sized)}`;
+}
+
+/** Alias: album 500x500 cover for the album page */
+export function albumImage(url: string): string {
+  return proxyImage(url, '500x500');
+}
+
+/** hiResImage used by search result cards */
+export function hiResImage(url: string): string {
+  return proxyImage(url, '150x150');
+}
+
+export function isSaavnAlbumUrl(value: string): boolean {
+  return /jiosaavn\.com\/album\//i.test(value.trim());
+}
+
+/** Total duration from array of songs (in seconds) */
+export function totalAlbumDuration(songs: SaavnSong[]): string {
+  const total = songs.reduce((acc, s) => acc + parseInt(s.more_info?.duration || '0', 10), 0);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s}s`;
+}

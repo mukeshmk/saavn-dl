@@ -1,7 +1,13 @@
 [
   {
+    "id": 4,
+    "title": "Added Album Download Support!",
+    "date": "15-06-2026",
+    "content": "saavn-dl now supports full album downloads! You can now search albums or fetch JioSaavn album links and browse complete tracklist directly in saavn-dl. Also you can download individual tracks from an album or download entire album in zip format or as individual files. If you encounter any issues or have suggestions for improvement, please let me know on GitHub/Discord. Enjoy the new album download feature!"
+  },
+  {
     "id": 3,
-    "title": "Search feature is here!",
+    "title": "Search Feature Is Here!",
     "date": "30-05-2026",
     "content": "Finally, The search feature is here! You can now search songs directly in saavn-dl! Simply type the song name in the search bar and hit enter. No more need to copy links from jiosaavn.com. You can still paste links if you are unable to find the song in search results. Note: Search results are fetched from jiosaavn.com, so if a song is not available on jiosaavn.com, it won't appear in search results here. If you face any issues, please let me know on GitHub/Discord. Enjoy the new feature!"
   },
