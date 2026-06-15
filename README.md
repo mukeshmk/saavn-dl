@@ -9,14 +9,14 @@ Designed with a premium glassmorphism-inspired UI.
 ## Preview
 
 ### Home
-![saavn-dl Home](./assets/home.png)
+![saavn-dl Home](./assets/home-1.png)
 
 ### Track
 
-![saavn-dl Track view](./assets/track.png)
+![saavn-dl Track view](./assets/track-1.png)
 
 ### Search
-![saavn-dl Track search](./assets/search.png)
+![saavn-dl Track search](./assets/search-1.png)
 
 ### Album search
 ![saavn-dl Album search](./assets/albumSearch.png)
