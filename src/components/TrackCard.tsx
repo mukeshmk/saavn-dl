@@ -32,6 +32,8 @@ export default function TrackCard({ song }: TrackCardProps) {
   const primaryArtists = more_info.artists.primary.map((a) => a.name).join(', ');
   const imageUrl =
   `https://sda.rhythmax.workers.dev/image?url=${encodeURIComponent(song.image)}`;
+  // Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
+  // Visit https://github.com/ODSkyler/saavn-dl-api for more information.
 
   return (
     <motion.div

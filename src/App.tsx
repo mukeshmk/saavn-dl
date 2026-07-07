@@ -14,6 +14,8 @@ import { searchAlbums, fetchAlbumDetail } from './utils/album';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SONG_API = 'https://sda.rhythmax.workers.dev';
+  // Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
+  // Visit https://github.com/ODSkyler/saavn-dl-api for more information.
 
 // ─── Search tab ───────────────────────────────────────────────────────────────
 

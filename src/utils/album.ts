@@ -1,7 +1,11 @@
 import type { AlbumSearchResult, AlbumDetail } from '../types/saavn';
 
 const SEARCH_API = 'https://js-odskyler.vercel.app/api/albums';
+  // Defalut API (js-odskyler.vercel.app). Replace with your jiosaavn-api instance.
+  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 const DETAIL_API = 'https://sda.rhythmax.workers.dev/album';
+  // Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
+  // Visit https://github.com/ODSkyler/saavn-dl-api for more information.
 
 export async function searchAlbums(query: string): Promise<AlbumSearchResult[]> {
   if (!query.trim()) return [];

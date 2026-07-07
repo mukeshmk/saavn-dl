@@ -1,6 +1,8 @@
 import type { SearchResult } from '../types/saavn';
 
 const SEARCH_API = 'https://js-odskyler.vercel.app/api/songs?q=';
+  // Defalut API (js-odskyler.vercel.app). Replace with your jiosaavn-api instance.
+  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 
 interface SearchApiResponse {
   results: SearchResult[];

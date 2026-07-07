@@ -98,6 +98,8 @@ export function searchImage(url: string) {
   );
 
   return `https://js-odskyler.vercel.app/api/image?url=${encodeURIComponent(image50)}`;
+  // Defalut API (js-odskyler.vercel.app). Replace with your jiosaavn-api instance.
+  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 }
 
 export function isSaavnUrl(value: string) {
@@ -162,6 +164,8 @@ export function proxyImage(url: string, size: '50x50' | '150x150' | '500x500' = 
   if (!url) return '';
   const sized = url.replace(/\d+x\d+/, size).replace('http://', 'https://');
   return `https://js-odskyler.vercel.app/api/image?url=${encodeURIComponent(sized)}`;
+  // Defalut API (js-odskyler.vercel.app). Replace with your jiosaavn-api instance.
+  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 }
 
 /** Alias: album 500x500 cover for the album page */
