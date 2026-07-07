@@ -73,16 +73,13 @@ npm run build
 | 💿 Individual Files (Album) | Downloads all track as individual files |
 | 📁 Zip File (Album) | Downloads all track and stores them in a zip folder |
 
+
 ---
+## Host your own JioSaavn API
 
-## Search API
+- To host your own JioSaavn API, check out https://github.com/ODSkyler/jiosaavn-api
+- To host your own saavn-dl API, check out https://github.com/ODSkyler/saavn-dl-api
 
-Search requests are powered by OD Skyler JioSaavn API
-
-```txt
-https://js-odskyler.vercel.app/api/songs?q={query}
-https://js-odskyler.vercel.app/api/albums?q={query}
-```
 ---
 
 ## Disclaimer
