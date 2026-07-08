@@ -62,6 +62,7 @@ export default function App() {
   const [showUpdates, setShowUpdates] = useState(false);
   const [updates, setUpdates]     = useState<UpdateItem[]>([]);
   const [showSupport, setShowSupport] = useState(false);
+  const [showSupportPrompt, setShowSupportPrompt] = useState(false);
   const lastSongSearch  = useRef<{ results: SearchResult[];       query: string } | null>(null);
   const lastAlbumSearch = useRef<{ results: AlbumSearchResult[];  query: string } | null>(null);
 
@@ -172,13 +173,23 @@ export default function App() {
     }
   };
 
+  // ── Support prompt ───────────────────────────────────────────────────────
+
+  const maybeShowSupportPrompt = () => {
+  const shown = localStorage.getItem("saavn-dl-support-shown");
+
+  if (!shown) {
+    setShowSupportPrompt(true);
+    localStorage.setItem("saavn-dl-support-shown", "true");
+  }
+};
+
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const isFetchingUrl   = view.type === 'fetching-song' || view.type === 'fetching-album';
   const isSearching     = view.type === 'searching-songs' || view.type === 'searching-albums';
   const isFetchingResult = view.type === 'fetching-song-result' || view.type === 'fetching-album-result';
   const isAnyLoading    = isFetchingUrl || isSearching || isFetchingResult;
-
   const showSongResults  = ['searching-songs', 'song-results', 'fetching-song-result'].includes(view.type) || (view.type === 'error' && view.context === 'search' && searchTab === 'songs');
   const showAlbumResults = ['searching-albums', 'album-results', 'fetching-album-result'].includes(view.type) || (view.type === 'error' && view.context === 'search' && searchTab === 'albums');
   const showSearch = showSongResults || showAlbumResults;
@@ -272,7 +283,7 @@ export default function App() {
             {view.type === 'track' && (
               <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
                 {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
-                <TrackCard song={view.song} />
+                <TrackCard song={view.song} onDownloadSuccess={maybeShowSupportPrompt} />
               </motion.div>
             )}
 
@@ -430,6 +441,66 @@ initial={{ opacity: 0 }}
   </motion.div>
 )}
         </AnimatePresence>
+
+        <AnimatePresence>
+  {showSupportPrompt && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+    >
+      <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-display font-bold text-white">
+            ❤️ Enjoying saavn-dl?
+          </h2>
+
+          <button
+            onClick={() => setShowSupportPrompt(false)}
+            className="text-white/50 hover:text-white transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm text-white/80 leading-relaxed">
+          If saavn-dl has been useful to you, consider supporting the project.
+          Every contribution helps cover hosting and development costs.
+        </p>
+
+        <div className="mt-6 flex gap-3">
+          <button
+  onClick={() => {
+    setShowSupportPrompt(false);
+    setShowSupport(true);
+  }}
+  className="flex-1 rounded-xl bg-cyan text-black font-semibold py-3 hover:bg-cyan-dim transition flex items-center justify-center gap-2"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"strokeWidth="2" viewBox="0 0 24 24" className="flex-shrink-0">
+    <path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"></path>
+    <path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95"></path>
+    <path d="M2 15l6 6"></path>
+    <path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"></path>
+  </svg>
+  <span>Support</span>
+</button>
+
+          <button
+            onClick={() => setShowSupportPrompt(false)}
+            className="flex-1 rounded-xl border border-border text-white/70 hover:text-white hover:border-white/20 transition"
+          >
+            Maybe later
+          </button>
+        </div>
+
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
+
       </div>
     </div>
   );

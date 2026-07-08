@@ -7,6 +7,7 @@ import DownloadButton from './DownloadButton';
 
 interface TrackCardProps {
   song: SaavnSong;
+  onDownloadSuccess?: () => void;
 }
 
 function formatDuration(seconds: string): string {
@@ -23,11 +24,10 @@ function formatPlays(n: string): string {
   return n;
 }
 
-export default function TrackCard({ song }: TrackCardProps) {
+export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
   const [quality, setQuality] = useState<Quality>('320');
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
-
   const { more_info } = song;
   const primaryArtists = more_info.artists.primary.map((a) => a.name).join(', ');
   const imageUrl =
@@ -141,7 +141,7 @@ export default function TrackCard({ song }: TrackCardProps) {
           <QualitySelector selected={quality} onChange={setQuality} />
         </div>
 
-        <DownloadButton song={song} quality={quality} />
+        <DownloadButton song={song} quality={quality} onDownloadSuccess={onDownloadSuccess} />
       </div>
 
       {/* Footer */}

@@ -6,11 +6,12 @@ import { downloadWithMetadata, downloadDirect } from '../utils/download';
 interface DownloadButtonProps {
   song: SaavnSong;
   quality: string;
+  onDownloadSuccess?: () => void;
 }
 
 type Phase = 'idle' | 'working' | 'done' | 'error';
 
-export default function DownloadButton({ song, quality }: DownloadButtonProps) {
+export default function DownloadButton({ song, quality, onDownloadSuccess }: DownloadButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [stage, setStage] = useState('');
   const [percent, setPercent] = useState(0);
@@ -41,6 +42,7 @@ export default function DownloadButton({ song, quality }: DownloadButtonProps) {
         setPercent(100);
       }
       setPhase('done');
+      onDownloadSuccess?.();
       setTimeout(() => setPhase('idle'), 3000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Download failed';
