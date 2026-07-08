@@ -87,7 +87,7 @@ npm run build
 If saavn-dl has been useful to you and you'd like to help cover hosting and development costs, you can support the project.
 
 <p align="center">
-  <img src="./assets/support-via-upi.jpg" alt="Support via UPI" width="220">
+  <img src="./public/support-via-upi.jpg" alt="Support via UPI" width="220">
 </p>
 
 **Ko-fi support coming soon ☕**
