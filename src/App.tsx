@@ -61,7 +61,7 @@ export default function App() {
   const [searchError, setSearchError] = useState('');
   const [showUpdates, setShowUpdates] = useState(false);
   const [updates, setUpdates]     = useState<UpdateItem[]>([]);
-
+  const [showSupport, setShowSupport] = useState(false);
   const lastSongSearch  = useRef<{ results: SearchResult[];       query: string } | null>(null);
   const lastAlbumSearch = useRef<{ results: AlbumSearchResult[];  query: string } | null>(null);
 
@@ -337,11 +337,22 @@ export default function App() {
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
             </svg>
           </button>
+          {/* Support */}
+          <button onClick={() => setShowSupport(true)}
+            className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-pink-400 hover:border-pink-400/30 hover:bg-pink-500/10 transition-all duration-200"
+            aria-label="Support">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"></path><path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95M2 15l6 6"></path><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"></path></svg>
+</button>
         </motion.div>
 
         {/* Updates modal */}
-        {showUpdates && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+        <AnimatePresence>{showUpdates && (<motion.div
+initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  exit={{ opacity: 0 }}
+  transition={{ duration: 0.2 }}
+  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+>
             <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-display font-bold text-text-primary">Updates</h2>
@@ -359,8 +370,66 @@ export default function App() {
                 ))}
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
+
+        {/* Support modal */}
+        <AnimatePresence>
+        {showSupport && (
+         <motion.div
+           initial={{ opacity: 0 }}
+           animate={{ opacity: 1 }}
+           exit={{ opacity: 0 }}
+           transition={{ duration: 0.2 }}
+           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+         >
+           <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+
+            <div className="flex items-center justify-between">
+            <h2 className="text-lg font-display font-bold text-text-primary">
+            Support saavn-dl
+            </h2>
+
+            <button
+            onClick={() => setShowSupport(false)}
+            className="text-text-muted hover:text-white transition-colors"
+            >
+           ✕
+        </button>
+      </div>
+
+      <p className="mt-4 text-sm text-white/80 leading-relaxed">
+        If saavn-dl has been useful to you and you'd like to help cover
+        hosting costs, you can support the project using UPI.
+      </p>
+
+      {/* QR Code */}
+<div className="mt-6 flex justify-center">
+  <img
+    src="./assets/support-via-upi.jpg"
+    alt="Support via UPI"
+    className="w-56 rounded-2xl border border-white/10"
+  />
+</div>
+
+<p className="mt-5 text-center text-sm text-white/80">
+  Ko-fi support will be available soon ☕
+</p>
+
+<p className="mt-2 text-center text-xs text-white/50">
+  For now, you can support the project by scanning the UPI QR code above.
+</p>
+
+<p className="mt-5 text-center text-xs text-white/50">
+  Donations are completely optional ❤️<br />
+  Every contribution helps cover hosting and development costs.
+</p>
+
+    </div>
+  </motion.div>
+)}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -31,7 +31,7 @@ Designed with a premium glassmorphism-inspired UI.
 
 - 🔗 Paste any JioSaavn song/album URL or just search by track/album name
 - 🎵 Built-in audio preview player
-- 🎚️ Quality selector upto 320 kbps
+- 🎚️ Quality selector up to 320 kbps
 - ⬇️ Download tracks & albums with embedded metadata
 - ⚡ Direct download fallback if ffmpeg fails
 
@@ -70,8 +70,8 @@ npm run build
 |------|-------------|
 | ⚡ Fast | Direct download without metadata embedding |
 | ✨ Enhanced | Downloads audio and embeds metadata using ffmpeg.wasm |
-| 💿 Individual Files (Album) | Downloads all track as individual files |
-| 📁 Zip File (Album) | Downloads all track and stores them in a zip folder |
+| 💿 Individual Files (Album) | Downloads all tracks as individual files |
+| 📁 Zip File (Album) | Downloads all track and stores them in a zip archive |
 
 
 ---
@@ -79,6 +79,20 @@ npm run build
 
 - To host your own JioSaavn API, check out https://github.com/ODSkyler/jiosaavn-api
 - To host your own saavn-dl API, check out https://github.com/ODSkyler/saavn-dl-api
+
+---
+
+## ❤️ Support
+
+If saavn-dl has been useful to you and you'd like to help cover hosting and development costs, you can support the project.
+
+<p align="center">
+  <img src="./assets/support-via-upi.jpg" alt="Support via UPI" width="220">
+</p>
+
+**Ko-fi support coming soon ☕**
+
+Donations are completely optional and help keep the project maintained.
 
 ---
 
@@ -106,3 +120,13 @@ This project is licensed under the Mozilla Public License 2.0 (MPL-2.0).
 ## Author
 
 Made with ❤️ by OD Skyler
+
+---
+
+<p align="center">
+  <a href="https://fmhy.net/audio#audio-ripping-sites">
+    <img src="./assets/fmhy.png" alt="As Seen on FMHY" height="50">
+  </a>
+</p>
+
+---
