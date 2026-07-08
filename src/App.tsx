@@ -407,7 +407,7 @@ initial={{ opacity: 0 }}
       {/* QR Code */}
 <div className="mt-6 flex justify-center">
   <img
-    src="./assets/support-via-upi.jpg"
+    src="/support-via-upi.jpg"
     alt="Support via UPI"
     className="w-56 rounded-2xl border border-white/10"
   />
