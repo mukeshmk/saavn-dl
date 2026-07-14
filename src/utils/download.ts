@@ -128,7 +128,15 @@ async function embedWithCover(
   ff: FFmpeg,
   audioData: Uint8Array,
   coverData: Uint8Array,
-  meta: { title: string; artist: string; album: string; year: string },
+  meta: {
+  title: string;
+  artist: string;
+  albumArtist: string;
+  album: string;
+  year: string;
+  publisher: string;
+  copyright: string;
+},
 ): Promise<Uint8Array> {
   await ff.writeFile('in.mp4', audioData);
   await ff.writeFile('cover.jpg', coverData);
@@ -149,6 +157,8 @@ async function embedWithCover(
     '-metadata', `artist=${meta.artist}`,
     '-metadata', `album=${meta.album}`,
     '-metadata', `date=${meta.year}`,
+    '-metadata', `publisher=${meta.publisher}`,
+    '-metadata', `copyright=${meta.copyright}`,
     '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
     '-movflags', '+faststart',
     'out.mp4',
@@ -163,7 +173,15 @@ async function embedWithCover(
 async function embedMetaOnly(
   ff: FFmpeg,
   audioData: Uint8Array,
-  meta: { title: string; artist: string; album: string; year: string },
+  meta: {
+  title: string;
+  artist: string;
+  albumArtist: string;
+  album: string;
+  year: string;
+  publisher: string;
+  copyright: string;
+},
 ): Promise<Uint8Array> {
   await ff.writeFile('in.mp4', audioData);
 
@@ -174,6 +192,8 @@ async function embedMetaOnly(
     '-metadata', `artist=${meta.artist}`,
     '-metadata', `album=${meta.album}`,
     '-metadata', `date=${meta.year}`,
+    '-metadata', `publisher=${meta.publisher}`,
+    '-metadata', `copyright=${meta.copyright}`,
     '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
     '-movflags', '+faststart',
     'out_meta.mp4',
@@ -224,11 +244,14 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   const audioData = new Uint8Array(await audioBlob.arrayBuffer());
   const artist = getArtistTag(song);
   const meta = {
-    title: song.title,
-    artist,
-    album: more_info.album,
-    year: song.year,
-  };
+  title: song.title,
+  artist,
+  albumArtist: artist,
+  album: more_info.album,
+  year: song.year,
+  publisher: more_info.label,
+  copyright: more_info.copyright_text,
+};
 
   let outputData: Uint8Array;
   let usedCover = false;

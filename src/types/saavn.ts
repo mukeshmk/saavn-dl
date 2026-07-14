@@ -10,6 +10,7 @@ export interface SaavnMoreInfo {
   album_id: string;
   album_token: string;
   album: string;
+  label: string;
   album_url: string;
   encrypted_media_url: string;
   duration: string;
@@ -66,7 +67,6 @@ export interface SearchResult {
   year?: string;
   play_count?: string;
   isExplicit?: boolean;
-
   more_info?: {
     duration?: string;
     album?: string;
@@ -97,8 +97,8 @@ export function searchImage(url: string) {
     "50x50"
   );
 
-  return `https://js-odskyler.vercel.app/api/image?url=${encodeURIComponent(image50)}`;
-  // Defalut API (js-odskyler.vercel.app). Replace with your jiosaavn-api instance.
+  return `https://rtmx.vercel.app/api/image?url=${encodeURIComponent(image50)}`;
+  // Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
   // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 }
 
@@ -163,8 +163,8 @@ export interface AlbumDetail {
 export function proxyImage(url: string, size: '50x50' | '150x150' | '500x500' = '150x150'): string {
   if (!url) return '';
   const sized = url.replace(/\d+x\d+/, size).replace('http://', 'https://');
-  return `https://js-odskyler.vercel.app/api/image?url=${encodeURIComponent(sized)}`;
-  // Defalut API (js-odskyler.vercel.app). Replace with your jiosaavn-api instance.
+  return `https://rtmx.vercel.app/api/image?url=${encodeURIComponent(sized)}`;
+  // Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
   // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 }
 
