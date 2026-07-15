@@ -25,6 +25,9 @@ Designed with a premium glassmorphism-inspired UI.
 
 ### Download Menu
 ![saavn-dl Download menu](./assets/downloadMenu.png)
+
+### Metadata Editor
+![saavn-dl Metadata editor](./assets/metadataEditor.png)
 ---
 
 ## Features
@@ -32,6 +35,7 @@ Designed with a premium glassmorphism-inspired UI.
 - 🔗 Paste any JioSaavn song/album URL or just search by track/album name
 - 🎵 Built-in audio preview player
 - 🎚️ Quality selector up to 320 kbps
+- 🗃️ Built-in metadata editor
 - ⬇️ Download tracks & albums with embedded metadata
 - ⚡ Direct download fallback if ffmpeg fails
 
