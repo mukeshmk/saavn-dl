@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { SaavnSong, Quality } from '../types/saavn';
 import AudioPreview from './AudioPreview';
 import QualitySelector from './QualitySelector';
 import DownloadButton from './DownloadButton';
+import MetadataEditor from './MetadataEditor';
+import { buildDefaultMetadata, metadataIsModified } from '../types/metadata';
+import type { TrackMetadata } from '../types/metadata';
 
 interface TrackCardProps {
   song: SaavnSong;
@@ -34,8 +37,18 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
   `https://sda.rhythmax.workers.dev/image?url=${encodeURIComponent(song.image)}`;
   // Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
   // Visit https://github.com/ODSkyler/saavn-dl-api for more information.
+  const [showMetadataEditor, setShowMetadataEditor] = useState(false);
+  const [originalMeta, setOriginalMeta] = useState<TrackMetadata | null>(null);
+  const [editedMeta, setEditedMeta] = useState<TrackMetadata | null>(null);
+  useEffect(() => {
+  const meta = buildDefaultMetadata(song);
+
+  setOriginalMeta(meta);
+  setEditedMeta(meta);
+  }, [song.id]);
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -112,21 +125,39 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
               </div>
             </div>
 
-            {/* Preview */}
-            <div className="mt-3">
-               {more_info?.vlink?.trim() ? (
-                  <AudioPreview
+            {/* Preview + Metadata */}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+  onClick={() => setShowMetadataEditor(true)}
+  className={`px-4 py-2 rounded-xl border transition-all duration-200 text-sm font-display font-medium border whitespace-nowrap ${
+    originalMeta &&
+    editedMeta &&
+    metadataIsModified(originalMeta, editedMeta)
+      ? 'border-white/20 bg-white/5 text-white/80 hover:bg-white/10'
+      : 'border-border bg-glass text-white/40 hover:border-cyan/30 hover:text-white/60'
+  }`}
+>
+  {originalMeta &&
+  editedMeta &&
+  metadataIsModified(originalMeta, editedMeta)
+    ? 'Meta Updated'
+    : 'Edit Meta'}
+</button>
+             <div className="flex-1">
+                 {more_info?.vlink?.trim() ? (
+                 <AudioPreview
                   vlink={more_info.vlink}
                   title={song.title}
-             />
+               />
           ) : (
-            <div className="rounded-2xl border border-border bg-glass px-4 py-3 text-center">
-              <p className="text-sm text-white/50">
-                 Preview not available for this track
-                      </p>
-                  </div>
-                  )}
-            </div>
+              <div className="rounded-2xl border border-border bg-glass px-4 py-3 text-center">
+                   <p className="text-sm text-white/50">
+                  Preview not available for this track
+                   </p>
+                </div>
+                )}
+             </div>
+           </div>
           </div>
         </div>
       </div>
@@ -141,7 +172,25 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
           <QualitySelector selected={quality} onChange={setQuality} />
         </div>
 
-        <DownloadButton song={song} quality={quality} onDownloadSuccess={onDownloadSuccess} />
+        <DownloadButton
+  song={song}
+  quality={quality}
+  onDownloadSuccess={onDownloadSuccess}
+  overrideMeta={
+    originalMeta &&
+    editedMeta &&
+    metadataIsModified(originalMeta, editedMeta)
+      ? editedMeta
+      : undefined
+  }
+  overrideFilename={
+    originalMeta &&
+    editedMeta &&
+    metadataIsModified(originalMeta, editedMeta)
+      ? editedMeta.filename
+      : undefined
+  }
+/>
       </div>
 
       {/* Footer */}
@@ -162,8 +211,28 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
         <span className="text-white/30 text-[11px]">·</span>
         <span className="text-[11px] font-mono text-white/40">{more_info.copyright_text}</span>
       </div>
-    </motion.div>
-  );
+</motion.div>
+
+<AnimatePresence>
+  {showMetadataEditor && originalMeta && editedMeta && (
+    <MetadataEditor
+      original={originalMeta}
+      current={editedMeta}
+      onUpdate={(meta) => {
+        setEditedMeta(meta);
+        setShowMetadataEditor(false);
+      }}
+      onReset={() => {
+        setEditedMeta(originalMeta);
+        setShowMetadataEditor(false);
+      }}
+      onClose={() => setShowMetadataEditor(false)}
+    />
+  )}
+</AnimatePresence>
+
+</>
+);
 }
 
 function MetaChip({ icon, label }: { icon: string; label: string }) {

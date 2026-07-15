@@ -2,6 +2,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import type { SaavnSong } from '../types/saavn';
 import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from './decrypt';
+import type { TrackMetadata } from '../types/metadata';
 
 // ─── FFmpeg singleton ──────────────────────────────────────────────────────────
 
@@ -208,10 +209,12 @@ export interface DownloadOptions {
   song: SaavnSong;
   quality: string;
   onProgress?: (stage: string, percent: number) => void;
+  overrideMeta?: TrackMetadata;
+  overrideFilename?: string;
 }
 
 export async function downloadWithMetadata(opts: DownloadOptions): Promise<void> {
-  const { song, quality, onProgress } = opts;
+  const { song, quality, onProgress, overrideMeta, overrideFilename } = opts;
   const { more_info } = song;
 
   onProgress?.('Decrypting URL…', 8);
@@ -243,15 +246,35 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
 
   const audioData = new Uint8Array(await audioBlob.arrayBuffer());
   const artist = getArtistTag(song);
-  const meta = {
-  title: song.title,
-  artist,
-  albumArtist: artist,
-  album: more_info.album,
-  year: song.year,
-  publisher: more_info.label,
-  copyright: more_info.copyright_text,
-};
+  const meta = overrideMeta
+  ? {
+      title:       overrideMeta.title,
+      artist:      overrideMeta.artist,
+      albumArtist: overrideMeta.albumArtist,
+      album:       overrideMeta.album,
+      year:        overrideMeta.year,
+      publisher:   more_info.label,
+      copyright:   overrideMeta.copyright,
+      comment:     overrideMeta.comment,
+      genre:       overrideMeta.genre,
+      trackNumber: overrideMeta.trackNumber,
+      discNumber:  overrideMeta.discNumber,
+      composer:    overrideMeta.composer,
+    }
+  : {
+      title:       song.title,
+      artist,
+      albumArtist: artist,
+      album:       more_info.album,
+      year:        song.year,
+      publisher:   more_info.label,
+      copyright:   more_info.copyright_text,
+      comment:     'Downloaded via saavn-dl / Rhythmax',
+      genre:       '',
+      trackNumber: '',
+      discNumber:  '',
+      composer:    '',
+    };
 
   let outputData: Uint8Array;
   let usedCover = false;
@@ -281,24 +304,20 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
     ` | cover=${usedCover} | quality=${quality}kbps`
   );
 
-  const filename = sanitizeFilename(`${song.title} - ${artist}`) + '.m4a';
+  const filename = sanitizeFilename(overrideFilename ?? `${meta.title} - ${meta.artist}`) + '.m4a';
   triggerDownload(finalBlob, filename);
-
   onProgress?.('Done!', 100);
 }
 
-export async function downloadDirect(song: SaavnSong, quality: string): Promise<void> {
+export async function downloadDirect( song: SaavnSong, quality: string, overrideFilename?: string,): Promise<void> {
   const { more_info } = song;
   const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
   const audioUrl = getQualityUrl(decrypted, quality);
-
   const artist = getArtistTag(song);
-  const filename = sanitizeFilename(`${song.title} - ${artist}`) + '.m4a';
-
+  const filename = sanitizeFilename( overrideFilename ?? `${song.title} - ${artist}` ) + '.m4a';
   const resp = await fetch(audioUrl);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const blob = await resp.blob();
   if (blob.size < 1024) throw new Error('Received empty file');
-
   triggerDownload(blob, filename);
 }

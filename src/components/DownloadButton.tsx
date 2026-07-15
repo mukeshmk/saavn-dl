@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SaavnSong } from '../types/saavn';
 import { downloadWithMetadata, downloadDirect } from '../utils/download';
+import type { TrackMetadata } from '../types/metadata';
 
 interface DownloadButtonProps {
   song: SaavnSong;
   quality: string;
+  overrideMeta?: TrackMetadata;
+  overrideFilename?: string;
   onDownloadSuccess?: () => void;
 }
 
 type Phase = 'idle' | 'working' | 'done' | 'error';
 
-export default function DownloadButton({ song, quality, onDownloadSuccess }: DownloadButtonProps) {
+export default function DownloadButton({ song, quality, overrideMeta, overrideFilename, onDownloadSuccess }: DownloadButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [stage, setStage] = useState('');
   const [percent, setPercent] = useState(0);
@@ -34,11 +37,13 @@ export default function DownloadButton({ song, quality, onDownloadSuccess }: Dow
             setStage(s);
             setPercent(p);
           },
+          overrideMeta,
+          overrideFilename
         });
       } else {
         setStage('Preparing…');
         setPercent(30);
-        await downloadDirect(song, quality);
+        await downloadDirect(song, quality, overrideFilename);
         setPercent(100);
       }
       setPhase('done');

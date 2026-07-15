@@ -1,4 +1,10 @@
-[
+[ 
+  {
+    "id": 6,
+    "title": "Metadata Editor!",
+    "date": "15-07-2026",
+    "content": "JioSaavn metadata are often incorrect, That's why saavn-dl now has a built-in metadata editor! You can now edit song metadata (title, artist, album, year, genre) before downloading the song. This feature allows you to customize the metadata of your downloaded songs according to your preferences. If you encounter any issues or have suggestions for improvement, please let me know on GitHub/Discord. Enjoy the new metadata editor feature!"
+  },
   {
     "id": 5,
     "title": "Support the Project!",
