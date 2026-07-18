@@ -1,50 +1,62 @@
 [
   {
-    "id": 8,
+    "id": 10,
+    "title": "Background Download Queue",
+    "date": "18-07-2026",
+    "content": "Downloads no longer block the UI! You can now queue multiple songs and albums for background download. A floating indicator in the top-right shows what's downloading, and clicking it opens a panel to view, manage, retry, or remove downloads. Keep searching and browsing while your music downloads in the background."
+  },
+  {
+    "id": 9,
     "title": "Artist Search + Album Browsing",
     "date": "18-07-2026",
     "content": "You can now search for artists by name! A new \"Artists\" tab in the search bar lets you find any artist, view their full discography (albums, singles, and latest releases), and click through to download any album. The artist page shows a profile card with listener count and tabbed navigation between albums, singles, and latest releases."
   },
   {
-    "id": 7,
+    "id": 8,
     "title": "Navidrome Compatibility + Album Metadata Editor",
     "date": "18-07-2026",
-    "content": "Three improvements in this update: 1) Fixed a download failure (\"Content-Length exceeds response Body\") caused by the proxy forwarding incomplete upstream responses — downloads are now buffered with automatic retry on transient failures. 2) You can now edit metadata per-track in the album view — expand any track and click \"Edit Meta\" before downloading. 3) Multi-artist album detection for Navidrome — saavn-dl now detects albums with tracks by different artists and offers to set a unified Album Artist tag so your music server keeps the album grouped as one entry. Works across all download modes (Individual, ZIP, Library)."
+    "content": "Three improvements in this update: 1) Fixed a download failure caused by the proxy forwarding incomplete upstream responses — downloads are now buffered with automatic retry on transient failures. 2) You can now edit metadata per-track in the album view — expand any track and click \"Edit Meta\" before downloading. 3) Multi-artist album detection for Navidrome — saavn-dl now detects albums with tracks by different artists and offers to set a unified Album Artist tag so your music server keeps the album grouped as one entry."
+  },
+  {
+    "id": 7,
+    "title": "Self-Hosted: Docker, VPN Proxy & Library Sync",
+    "date": "18-07-2026",
+    "content": "Major self-hosting update! saavn-dl now ships with a Dockerfile (multi-stage Node 20 build), a server-side proxy that routes all audio/cover fetches through the host network (perfect for Gluetun/WireGuard VPN setups), and a full Library Sync system — stage downloads on a fast SSD and sync to your NAS on a configurable cron schedule with retry logic. Set SAAVN_LIBRARY_PATH and SAAVN_MUSIC_PATH to enable."
   },
   {
     "id": 6,
     "title": "Metadata Editor!",
     "date": "15-07-2026",
-    "content": "JioSaavn metadata are often incorrect, That's why saavn-dl now has a built-in metadata editor! You can now edit song metadata (title, artist, album, year, genre) before downloading the song. This feature allows you to customize the metadata of your downloaded songs according to your preferences. If you encounter any issues or have suggestions for improvement, please let me know on GitHub/Discord. Enjoy the new metadata editor feature!"
+    "content": "JioSaavn metadata are often incorrect. That's why saavn-dl now has a built-in metadata editor! You can now edit song metadata (title, artist, album, year, genre) before downloading. This allows you to customize the metadata of your downloaded songs according to your preferences."
   },
   {
     "id": 5,
-    "title": "Support the Project!",
-    "date": "08-07-2026",
-    "content": "saavn-dl will always remain free for everyone. If you'd like to support the project, you can now do so via UPI. Every contribution helps cover hosting costs and ongoing development, making it possible to keep the service free and continue adding new features. International support through Ko-fi is coming soon. Again thank you to everyone who uses, tests, and shares saavn-dl — your support means a lot!"
+    "title": "Added Album Download Support!",
+    "date": "15-06-2026",
+    "content": "saavn-dl now supports full album downloads! You can search albums or paste JioSaavn album links and browse the complete tracklist. Download individual tracks from an album, or grab the entire album as a ZIP or as individual files with embedded metadata and cover art."
   },
   {
     "id": 4,
-    "title": "Added Album Download Support!",
-    "date": "15-06-2026",
-    "content": "saavn-dl now supports full album downloads! You can now search albums or fetch JioSaavn album links and browse complete tracklist directly in saavn-dl. Also you can download individual tracks from an album or download entire album in zip format or as individual files. If you encounter any issues or have suggestions for improvement, please let me know on GitHub/Discord. Enjoy the new album download feature!"
+    "title": "Search Feature Is Here!",
+    "date": "30-05-2026",
+    "content": "The search feature is here! You can now search songs directly in saavn-dl. Simply type the song name in the search bar and hit enter. No more need to copy links from jiosaavn.com. You can still paste links if you are unable to find the song in search results."
   },
   {
     "id": 3,
-    "title": "Search Feature Is Here!",
-    "date": "30-05-2026",
-    "content": "Finally, The search feature is here! You can now search songs directly in saavn-dl! Simply type the song name in the search bar and hit enter. No more need to copy links from jiosaavn.com. You can still paste links if you are unable to find the song in search results. Note: Search results are fetched from jiosaavn.com, so if a song is not available on jiosaavn.com, it won't appear in search results here. If you face any issues, please let me know on GitHub/Discord. Enjoy the new feature!"
+    "title": "Search Feature Coming Soon!",
+    "date": "26-05-2026",
+    "content": "I know that many users outside India are facing issues accessing jiosaavn.com because JioSaavn is only available in India. Search feature coming soon so you can search songs directly here. Quick solution for now: Use a VPN set to India to access jiosaavn.com and copy links from there."
   },
   {
     "id": 2,
-    "title": "Search Feature Coming Soon!",
-    "date": "26-05-2026",
-    "content": "I know that many users outside India are facing issues when trying to get access to jiosaavn.com because JioSaavn is only available in India. I'm gonna implement search feature here within next few days so you can just search songs here. No more need to copy links from jiosaavn.com. Stay tuned! Quick solution for now: Use VPN and set location to India, then you can access jiosaavn.com and copy links from there."
+    "title": "FFMpeg Update",
+    "date": "25-05-2026",
+    "content": "FFMpeg issue fixed! Metadata loading and embedding should now work without any issues."
   },
   {
     "id": 1,
-    "title": "FFMpeg Update",
-    "date": "25-05-2026",
-    "content": "FFMpeg issue fixed! Metadata loading and embedding should now work without any issues. But if you encounter any problems, please let me know on GitHub/Discord."
+    "title": "Welcome to saavn-dl!",
+    "date": "20-05-2026",
+    "content": "saavn-dl is a browser-based JioSaavn downloader with ffmpeg-powered metadata embedding. Paste any JioSaavn song URL, pick your quality (up to 320 kbps), and download with full metadata and cover art baked in."
   }
 ]

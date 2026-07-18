@@ -1,34 +1,11 @@
 # saavn-dl
 
-A modern JioSaavn songs & albums downloader and with ffmpeg powered metadata embedding.  
+A modern JioSaavn songs & albums downloader with ffmpeg powered metadata embedding.  
 Search by song, album, or artist name — browse discographies and download entire albums.
 
 Built with React, Vite and TypeScript.  
 Designed with a premium glassmorphism-inspired UI.
 
----
-## Preview
-
-### Home
-![saavn-dl Home](./assets/home.png)
-### Track
-
-![saavn-dl Track view](./assets/track.png)
-
-### Search
-![saavn-dl Track search](./assets/search.png)
-
-### Album search
-![saavn-dl Album search](./assets/albumSearch.png)
-
-### Album
-![saavn-dl Album view](./assets/album.png)
-
-### Download Menu
-![saavn-dl Download menu](./assets/downloadMenu.png)
-
-### Metadata Editor
-![saavn-dl Metadata editor](./assets/metadataEditor.png)
 ---
 
 ## Features
@@ -40,6 +17,7 @@ Designed with a premium glassmorphism-inspired UI.
 - 🗃️ Built-in metadata editor (per-track, works on both song and album views)
 - 🎛️ Navidrome compatibility — auto-detects multi-artist albums and offers to unify Album Artist tag
 - ⬇️ Download tracks & albums with embedded metadata
+- 🔄 Background download queue — queue multiple songs/albums and keep browsing while they download
 - ⚡ Direct download fallback if ffmpeg fails
 - 📂 Library Sync — stage downloads on a fast SSD and sync to NAS on a schedule
 - 🔒 VPN proxy — all CDN fetches buffered and routed server-side with retry logic, compatible with Gluetun/WireGuard
@@ -242,6 +220,19 @@ SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dis
 
 ---
 
+## Background Download Queue
+
+Downloads now process in the background without blocking the UI. You can queue multiple songs and albums, then keep searching and browsing while they download.
+
+- **Queue songs** — click the `+` button next to the download button on any track
+- **Queue albums** — click "Queue It" in the album download modal
+- **Download indicator** — a floating button appears in the top-right showing the active download, progress, and queue count
+- **Download manager** — click the indicator to open a slide-in panel showing all active, queued, completed, and failed downloads with retry/remove controls
+
+All queued downloads continue to route through `/api/proxy` (VPN) when self-hosted.
+
+---
+
 ## Download Modes
 
 | Mode | Description |
@@ -249,10 +240,9 @@ SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dis
 | ⚡ Fast | Direct download without metadata embedding |
 | ✨ Enhanced | Downloads audio and embeds metadata using ffmpeg.wasm |
 | 💿 Individual Files (Album) | Downloads all tracks as individual files |
-| 📁 Zip File (Album) | Downloads all track and stores them in a zip archive |
+| 📁 Zip File (Album) | Downloads all tracks and stores them in a zip archive |
 | 📚 Save to Library (Album) | Saves tracks directly to a server-side folder (requires `SAAVN_LIBRARY_PATH`) |
 | 🔄 Library Sync | Moves staged files from SSD to NAS (requires both `SAAVN_LIBRARY_PATH` and `SAAVN_MUSIC_PATH`) |
-
 
 ---
 
@@ -289,19 +279,3 @@ Users are responsible for complying with their local copyright laws.
 ## License
 
 This project is licensed under the Mozilla Public License 2.0 (MPL-2.0).
-
----
-
-## Author
-
-Made with ❤️ by OD Skyler
-
----
-
-<p align="center">
-  <a href="https://fmhy.net/audio#audio-ripping-sites">
-    <img src="./assets/fmhy.png" alt="As Seen on FMHY" height="50">
-  </a>
-</p>
-
----
