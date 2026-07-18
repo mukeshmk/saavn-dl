@@ -37,28 +37,43 @@ const DELAY_BETWEEN_REQUESTS = 500; // ms between API calls to avoid rate limiti
 
 // ─── CLI args ─────────────────────────────────────────────────────────────────
 
-const scanDir = process.argv[2];
-const historyPath = process.argv[3] || null;
+const args = process.argv.slice(2);
+const refreshMode = args.includes('--refresh');
+const positionalArgs = args.filter(a => !a.startsWith('--'));
 
-if (!scanDir) {
+const scanDir = positionalArgs[0];
+const historyPath = positionalArgs[1] || null;
+
+if (!scanDir && !refreshMode) {
   console.error('Usage: node scripts/seed-history.js <scan-directory> [history-file-path]');
+  console.error('       node scripts/seed-history.js --refresh <history-file-path>');
+  console.error('');
+  console.error('Modes:');
+  console.error('  (default)   Scan a directory and add new album entries with API lookup');
+  console.error('  --refresh   Re-fetch missing images/metadata for existing entries in the history file');
   console.error('');
   console.error('Examples:');
   console.error('  node scripts/seed-history.js /mnt/ssd');
   console.error('  node scripts/seed-history.js /mnt/nas /mnt/ssd/.saavn-dl-history.json');
+  console.error('  node scripts/seed-history.js --refresh /mnt/ssd/.saavn-dl-history.json');
   process.exit(1);
 }
 
-const resolvedScanDir = resolve(scanDir);
+// In refresh mode, first positional arg is the history file path
+const resolvedScanDir = refreshMode ? null : resolve(scanDir);
+const resolvedHistoryPath = refreshMode
+  ? resolve(positionalArgs[0] || '.saavn-dl-history.json')
+  : (historyPath ? resolve(historyPath) : join(resolvedScanDir, '.saavn-dl-history.json'));
 
-if (!existsSync(resolvedScanDir)) {
+if (!refreshMode && !existsSync(resolvedScanDir)) {
   console.error(`Error: Directory not found: ${resolvedScanDir}`);
   process.exit(1);
 }
 
-const resolvedHistoryPath = historyPath
-  ? resolve(historyPath)
-  : join(resolvedScanDir, '.saavn-dl-history.json');
+if (refreshMode && !existsSync(resolvedHistoryPath)) {
+  console.error(`Error: History file not found: ${resolvedHistoryPath}`);
+  process.exit(1);
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +165,34 @@ async function searchAlbumOnSaavn(title, artist) {
 }
 
 /**
+ * Fetch album detail by saavnId to get image and metadata.
+ * Uses JioSaavn's internal API directly with the numeric album ID.
+ */
+async function fetchAlbumById(saavnId) {
+  try {
+    const res = await fetch(
+      `https://www.jiosaavn.com/api.php?__call=content.getAlbumDetails&albumid=${encodeURIComponent(saavnId)}&_format=json&_marker=0`
+    );
+    if (res.ok) {
+      const text = await res.text();
+      // JioSaavn sometimes returns JSONP or has trailing garbage — find the JSON object
+      const jsonStart = text.indexOf('{');
+      if (jsonStart === -1) return null;
+      const data = JSON.parse(text.slice(jsonStart));
+      if (data && data.image) {
+        return {
+          saavnId: data.albumid || saavnId,
+          image: data.image,
+          title: data.title || data.name || '',
+        };
+      }
+    }
+  } catch { /* ignore */ }
+
+  return null;
+}
+
+/**
  * Generate a fallback ID for entries where API lookup fails.
  */
 function generateFallbackId(title, artist) {
@@ -215,7 +258,75 @@ async function scanAlbums() {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function main() {
+async function refreshExistingEntries() {
+  console.log(`Refreshing entries in: ${resolvedHistoryPath}`);
+  console.log('Looking for entries with missing images or fallback IDs...\n');
+
+  const state = await readHistory();
+  const entries = state.entries;
+
+  // Find entries that need refreshing: missing image, or have fallback IDs
+  const needsRefresh = entries.filter(e =>
+    e.type === 'album' && (!e.image || e.saavnId?.startsWith('album-seed-'))
+  );
+
+  if (needsRefresh.length === 0) {
+    console.log('All entries already have images and real IDs. Nothing to refresh.');
+    return;
+  }
+
+  console.log(`Found ${needsRefresh.length} entries to refresh.\n`);
+
+  let updated = 0;
+  let failed = 0;
+
+  for (let i = 0; i < needsRefresh.length; i++) {
+    const entry = needsRefresh[i];
+    const progress = `[${i + 1}/${needsRefresh.length}]`;
+
+    let result = null;
+
+    // If entry has a real saavnId (not a fallback), fetch by ID directly
+    if (entry.saavnId && !entry.saavnId.startsWith('album-seed-')) {
+      result = await fetchAlbumById(entry.saavnId);
+    }
+
+    // If that didn't work (or it was a fallback ID), try searching by title + artist
+    if (!result) {
+      result = await searchAlbumOnSaavn(entry.title, entry.artist);
+    }
+
+    if (result) {
+      // Update the entry in place
+      const idx = entries.indexOf(entry);
+      if (idx !== -1) {
+        // Only update saavnId if it was a fallback
+        if (entry.saavnId?.startsWith('album-seed-')) {
+          entries[idx].saavnId = result.saavnId;
+          entries[idx].id = `album-${result.saavnId}-seed`;
+        }
+        entries[idx].image = result.image;
+        const what = !entry.image ? 'image updated' : 'ID + image updated';
+        console.log(`  ${progress} ✓ ${entry.title} — ${entry.artist} → ${what}`);
+        updated++;
+      }
+    } else {
+      console.log(`  ${progress} ✗ ${entry.title} — ${entry.artist} (not found on API)`);
+      failed++;
+    }
+
+    if (i < needsRefresh.length - 1) {
+      await sleep(DELAY_BETWEEN_REQUESTS);
+    }
+  }
+
+  await writeHistory(state);
+
+  console.log(`\nDone! Updated ${updated} entries, ${failed} could not be found.`);
+  console.log(`Total history entries: ${state.entries.length}`);
+}
+
+async function seedFromDirectory() {
   console.log(`Scanning: ${resolvedScanDir}`);
   console.log(`History file: ${resolvedHistoryPath}`);
   console.log('');
@@ -303,6 +414,14 @@ async function main() {
 
   console.log(`\nDone! Added ${added} new entries, skipped ${skipped} duplicates.`);
   console.log(`Total history entries: ${state.entries.length}`);
+}
+
+async function main() {
+  if (refreshMode) {
+    await refreshExistingEntries();
+  } else {
+    await seedFromDirectory();
+  }
 }
 
 main().catch((err) => {
