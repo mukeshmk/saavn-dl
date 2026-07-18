@@ -10,6 +10,9 @@ import AlbumResultCard from './components/album/AlbumResultCard';
 import LibraryPage from './components/library/LibraryPage';
 import ArtistPage from './components/artist/ArtistPage';
 import ArtistResultCard from './components/artist/ArtistResultCard';
+import { DownloadQueueProvider } from './components/DownloadQueueContext';
+import DownloadIndicator from './components/DownloadIndicator';
+import DownloadManagerPanel from './components/DownloadManagerPanel';
 import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail, ArtistSearchResult, ArtistDetail } from './types/saavn';
 import { searchSongs } from './utils/search';
 import { searchAlbums, fetchAlbumDetail } from './utils/album';
@@ -73,6 +76,7 @@ export default function App() {
   const [searchBarKey, setSearchBarKey] = useState(0);
   const [showUpdates, setShowUpdates] = useState(false);
   const [updates, setUpdates] = useState<UpdateItem[]>([]);
+  const [showDownloadPanel, setShowDownloadPanel] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showSupportPrompt, setShowSupportPrompt] = useState(false);
   const [musicPathEnabled, setMusicPathEnabled] = useState(false);
@@ -270,350 +274,356 @@ export default function App() {
   const showSearch = showSongResults || showAlbumResults || showArtistResults;
 
   return (
-    <div className="min-h-screen bg-void relative overflow-x-hidden">
-      {/* Ambient bg */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-mesh-cyan" />
-        <div className="absolute inset-0 bg-mesh-rose" />
-        <div className="absolute inset-0 opacity-[0.012]" style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px)',
-          backgroundSize: '40px 40px',
-        }} />
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center min-h-screen px-4 py-10 sm:py-16">
-
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <h1
-              onClick={goHome}
-              className="text-2xl font-display font-bold text-text-primary tracking-tight cursor-pointer hover:opacity-80 transition-opacity"
-            >
-              saavn<span className="text-cyan">-dl</span>
-            </h1>
-          </div>
-          <p className="text-[13px] text-white/60 font-body">
-            Download songs &amp; albums from JioSaavn · up to <span className="text-cyan font-mono">320 kbps</span>
-          </p>
-        </motion.div>
-
-        {/* Search bar */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }} className="w-full max-w-2xl">
-          <SearchBar
-            key={searchBarKey}
-            onUrlFetch={handleUrlFetch}
-            onAlbumFetch={handleAlbumFetch}
-            onSearch={handleSearch}
-            isLoading={isAnyLoading}
-          />
-        </motion.div>
-
-        {/* Search mode tabs — visible while search results/idle are shown */}
-        <AnimatePresence>
-          {(showSearch || view.type === 'idle') && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="w-full max-w-2xl mt-4 flex gap-1"
-            >
-              {(['songs', 'albums', 'artists'] as SearchTab[]).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setSearchTab(tab)}
-                  className={`px-4 py-1.5 rounded-lg text-[12px] font-display font-semibold capitalize transition-all duration-150 ${searchTab === tab
-                    ? tab === 'albums'
-                      ? 'bg-cyan/10 border border-cyan/50 text-cyan'
-                      : 'bg-cyan/10 border border-cyan/30 text-cyan'
-                    : 'border border-transparent text-text-muted hover:text-text-secondary hover:border-border'
-                    }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Content area */}
-        <div className="w-full max-w-2xl mt-5">
-          <AnimatePresence mode="wait">
-
-            {/* URL loading skeletons */}
-            {view.type === 'fetching-song' && (
-              <motion.div key="song-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <TrackSkeleton />
-              </motion.div>
-            )}
-            {view.type === 'fetching-album' && (
-              <motion.div key="album-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <AlbumSkeleton />
-              </motion.div>
-            )}
-
-            {/* URL/generic error */}
-            {view.type === 'error' && view.context === 'url' && (
-              <FetchError key="url-error" message={view.message} />
-            )}
-
-            {/* Song TrackCard */}
-            {view.type === 'track' && (
-              <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
-                {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
-                <TrackCard song={view.song} onDownloadSuccess={maybeShowSupportPrompt} />
-              </motion.div>
-            )}
-
-            {/* Album page */}
-            {view.type === 'album' && (
-              <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
-              </motion.div>
-            )}
-
-            {/* Artist page */}
-            {view.type === 'artist' && (
-              <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
-              </motion.div>
-            )}
-
-            {/* Library page */}
-            {view.type === 'library' && (
-              <LibraryPage onBack={() => setView({ type: 'idle' })} />
-            )}
-
-            {/* Song search results */}
-            {showSongResults && (
-              <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <SearchErrorBanner error={searchError} />
-                <SearchResults
-                  results={view.type === 'song-results' || view.type === 'fetching-song-result' ? view.results : []}
-                  query={
-                    view.type === 'searching-songs' ? view.query
-                      : view.type === 'song-results' ? view.query
-                        : view.type === 'fetching-song-result' ? view.query
-                          : ''
-                  }
-                  isSearching={view.type === 'searching-songs'}
-                  fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
-                  onSelect={handleSongResultSelect}
-                  error={view.type === 'error' && view.context === 'search' ? view.message : ''}
-                />
-              </motion.div>
-            )}
-
-            {/* Album search results */}
-            {showAlbumResults && (
-              <motion.div key="album-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <SearchErrorBanner error={searchError} />
-                <AlbumResultsPanel
-                  view={view}
-                  onSelect={handleAlbumResultSelect}
-                />
-              </motion.div>
-            )}
-
-            {/* Artist search results */}
-            {showArtistResults && (
-              <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <SearchErrorBanner error={searchError} />
-                <ArtistResultsPanel
-                  view={view}
-                  onSelect={handleArtistResultSelect}
-                />
-              </motion.div>
-            )}
-
-          </AnimatePresence>
+    <DownloadQueueProvider>
+      <div className="min-h-screen bg-void relative overflow-x-hidden">
+        {/* Download indicator (top-right) */}
+        <DownloadIndicator onClick={() => setShowDownloadPanel(true)} />
+        {/* Download manager panel */}
+        <DownloadManagerPanel isOpen={showDownloadPanel} onClose={() => setShowDownloadPanel(false)} />
+        {/* Ambient bg */}
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-mesh-cyan" />
+          <div className="absolute inset-0 bg-mesh-rose" />
+          <div className="absolute inset-0 opacity-[0.012]" style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px)',
+            backgroundSize: '40px 40px',
+          }} />
         </div>
 
-        {/* Footer */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="mt-auto pt-16 flex items-center justify-center gap-4">
-          <a href="https://github.com/ODSkyler/saavn-dl" target="_blank" rel="noopener noreferrer"
-            className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-white hover:border-white/20 hover:bg-white/5 transition-all duration-200" aria-label="GitHub">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.866-.013-1.699-2.782.605-3.37-1.343-3.37-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.31.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.523 2 12 2z" />
-            </svg>
-          </a>
-          <a href="https://discord.gg/NcvrpP6bU3" target="_blank" rel="noopener noreferrer"
-            className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-[#5865F2] hover:border-[#5865F2]/30 hover:bg-[#5865F2]/10 transition-all duration-200" aria-label="Discord">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20.222 4.779a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.078.037c-.211.375-.444.864-.608 1.249a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.249.077.077 0 0 0-.078-.037 19.736 19.736 0 0 0-4.885 1.515.07.07 0 0 0-.032.027C.533 9.046-.32 13.17.099 17.243a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.027 13.83 13.83 0 0 0 1.226-1.994.076.076 0 0 0-.041-.105 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.04.106c.36.698.771 1.364 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .031-.055c.5-4.708-.838-8.795-3.548-12.433a.061.061 0 0 0-.031-.028zM8.02 14.307c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.095 2.157 2.418 0 1.334-.947 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.095 2.157 2.418 0 1.334-.947 2.419-2.157 2.419z" />
-            </svg>
-          </a>
-          <button onClick={() => setShowUpdates(true)}
-            className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200" aria-label="Updates">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-          </button>
-          {/* Support */}
-          <button onClick={() => setShowSupport(true)}
-            className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-pink-400 hover:border-pink-400/30 hover:bg-pink-500/10 transition-all duration-200"
-            aria-label="Support">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"></path><path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95M2 15l6 6"></path><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"></path></svg>
-          </button>
-          {/* Library (only when SAAVN_MUSIC_PATH is set) */}
-          {musicPathEnabled && (
-            <button onClick={() => setView({ type: 'library' })}
-              className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200"
-              aria-label="Library">
+        <div className="relative z-10 flex flex-col items-center min-h-screen px-4 py-10 sm:py-16">
+
+          {/* Header */}
+          <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="mb-8 text-center">
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <h1
+                onClick={goHome}
+                className="text-2xl font-display font-bold text-text-primary tracking-tight cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                saavn<span className="text-cyan">-dl</span>
+              </h1>
+            </div>
+            <p className="text-[13px] text-white/60 font-body">
+              Download songs &amp; albums from JioSaavn · up to <span className="text-cyan font-mono">320 kbps</span>
+            </p>
+          </motion.div>
+
+          {/* Search bar */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }} className="w-full max-w-2xl">
+            <SearchBar
+              key={searchBarKey}
+              onUrlFetch={handleUrlFetch}
+              onAlbumFetch={handleAlbumFetch}
+              onSearch={handleSearch}
+              isLoading={isAnyLoading}
+            />
+          </motion.div>
+
+          {/* Search mode tabs — visible while search results/idle are shown */}
+          <AnimatePresence>
+            {(showSearch || view.type === 'idle') && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="w-full max-w-2xl mt-4 flex gap-1"
+              >
+                {(['songs', 'albums', 'artists'] as SearchTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setSearchTab(tab)}
+                    className={`px-4 py-1.5 rounded-lg text-[12px] font-display font-semibold capitalize transition-all duration-150 ${searchTab === tab
+                      ? tab === 'albums'
+                        ? 'bg-cyan/10 border border-cyan/50 text-cyan'
+                        : 'bg-cyan/10 border border-cyan/30 text-cyan'
+                      : 'border border-transparent text-text-muted hover:text-text-secondary hover:border-border'
+                      }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Content area */}
+          <div className="w-full max-w-2xl mt-5">
+            <AnimatePresence mode="wait">
+
+              {/* URL loading skeletons */}
+              {view.type === 'fetching-song' && (
+                <motion.div key="song-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <TrackSkeleton />
+                </motion.div>
+              )}
+              {view.type === 'fetching-album' && (
+                <motion.div key="album-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <AlbumSkeleton />
+                </motion.div>
+              )}
+
+              {/* URL/generic error */}
+              {view.type === 'error' && view.context === 'url' && (
+                <FetchError key="url-error" message={view.message} />
+              )}
+
+              {/* Song TrackCard */}
+              {view.type === 'track' && (
+                <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
+                  {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
+                  <TrackCard song={view.song} onDownloadSuccess={maybeShowSupportPrompt} />
+                </motion.div>
+              )}
+
+              {/* Album page */}
+              {view.type === 'album' && (
+                <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
+                </motion.div>
+              )}
+
+              {/* Artist page */}
+              {view.type === 'artist' && (
+                <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
+                </motion.div>
+              )}
+
+              {/* Library page */}
+              {view.type === 'library' && (
+                <LibraryPage onBack={() => setView({ type: 'idle' })} />
+              )}
+
+              {/* Song search results */}
+              {showSongResults && (
+                <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <SearchErrorBanner error={searchError} />
+                  <SearchResults
+                    results={view.type === 'song-results' || view.type === 'fetching-song-result' ? view.results : []}
+                    query={
+                      view.type === 'searching-songs' ? view.query
+                        : view.type === 'song-results' ? view.query
+                          : view.type === 'fetching-song-result' ? view.query
+                            : ''
+                    }
+                    isSearching={view.type === 'searching-songs'}
+                    fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
+                    onSelect={handleSongResultSelect}
+                    error={view.type === 'error' && view.context === 'search' ? view.message : ''}
+                  />
+                </motion.div>
+              )}
+
+              {/* Album search results */}
+              {showAlbumResults && (
+                <motion.div key="album-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <SearchErrorBanner error={searchError} />
+                  <AlbumResultsPanel
+                    view={view}
+                    onSelect={handleAlbumResultSelect}
+                  />
+                </motion.div>
+              )}
+
+              {/* Artist search results */}
+              {showArtistResults && (
+                <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <SearchErrorBanner error={searchError} />
+                  <ArtistResultsPanel
+                    view={view}
+                    onSelect={handleArtistResultSelect}
+                  />
+                </motion.div>
+              )}
+
+            </AnimatePresence>
+          </div>
+
+          {/* Footer */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="mt-auto pt-16 flex items-center justify-center gap-4">
+            <a href="https://github.com/ODSkyler/saavn-dl" target="_blank" rel="noopener noreferrer"
+              className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-white hover:border-white/20 hover:bg-white/5 transition-all duration-200" aria-label="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.866-.013-1.699-2.782.605-3.37-1.343-3.37-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.31.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.523 2 12 2z" />
+              </svg>
+            </a>
+            <a href="https://discord.gg/NcvrpP6bU3" target="_blank" rel="noopener noreferrer"
+              className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-[#5865F2] hover:border-[#5865F2]/30 hover:bg-[#5865F2]/10 transition-all duration-200" aria-label="Discord">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.222 4.779a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.078.037c-.211.375-.444.864-.608 1.249a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.249.077.077 0 0 0-.078-.037 19.736 19.736 0 0 0-4.885 1.515.07.07 0 0 0-.032.027C.533 9.046-.32 13.17.099 17.243a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.027 13.83 13.83 0 0 0 1.226-1.994.076.076 0 0 0-.041-.105 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.04.106c.36.698.771 1.364 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .031-.055c.5-4.708-.838-8.795-3.548-12.433a.061.061 0 0 0-.031-.028zM8.02 14.307c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.095 2.157 2.418 0 1.334-.947 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.21 0 2.176 1.095 2.157 2.418 0 1.334-.947 2.419-2.157 2.419z" />
+              </svg>
+            </a>
+            <button onClick={() => setShowUpdates(true)}
+              className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200" aria-label="Updates">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
               </svg>
             </button>
-          )}
-        </motion.div>
+            {/* Support */}
+            <button onClick={() => setShowSupport(true)}
+              className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-pink-400 hover:border-pink-400/30 hover:bg-pink-500/10 transition-all duration-200"
+              aria-label="Support">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"></path><path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95M2 15l6 6"></path><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"></path></svg>
+            </button>
+            {/* Library (only when SAAVN_MUSIC_PATH is set) */}
+            {musicPathEnabled && (
+              <button onClick={() => setView({ type: 'library' })}
+                className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200"
+                aria-label="Library">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
+            )}
+          </motion.div>
 
-        {/* Updates modal */}
-        <AnimatePresence>{showUpdates && (<motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-        >
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-display font-bold text-text-primary">Updates</h2>
-              <button onClick={() => setShowUpdates(false)} className="text-text-muted hover:text-white transition-colors">✕</button>
-            </div>
-            <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-              {updates.map((u: UpdateItem) => (
-                <div key={u.id} className="rounded-2xl border border-border bg-glass p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-text-primary">{u.title}</p>
-                    <span className="text-[10px] font-mono text-cyan/80">{u.date}</span>
+          {/* Updates modal */}
+          <AnimatePresence>{showUpdates && (<motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          >
+            <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-display font-bold text-text-primary">Updates</h2>
+                <button onClick={() => setShowUpdates(false)} className="text-text-muted hover:text-white transition-colors">✕</button>
+              </div>
+              <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                {updates.map((u: UpdateItem) => (
+                  <div key={u.id} className="rounded-2xl border border-border bg-glass p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-text-primary">{u.title}</p>
+                      <span className="text-[10px] font-mono text-cyan/80">{u.date}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-white/90">{u.content}</p>
                   </div>
-                  <p className="mt-1 text-xs text-white/90">{u.content}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </motion.div>
-        )}
-        </AnimatePresence>
-
-        {/* Support modal */}
-        <AnimatePresence>
-          {showSupport && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-            >
-              <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
-
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-display font-bold text-text-primary">
-                    Support saavn-dl
-                  </h2>
-
-                  <button
-                    onClick={() => setShowSupport(false)}
-                    className="text-text-muted hover:text-white transition-colors"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <p className="mt-4 text-sm text-white/80 leading-relaxed">
-                  If saavn-dl has been useful to you and you'd like to help cover
-                  hosting costs, you can support the project using UPI.
-                </p>
-
-                {/* QR Code */}
-                <div className="mt-6 flex justify-center">
-                  <img
-                    src="/support-via-upi.jpg"
-                    alt="Support via UPI"
-                    className="w-56 rounded-2xl border border-white/10"
-                  />
-                </div>
-
-                <p className="mt-5 text-center text-sm text-white/80">
-                  Ko-fi support will be available soon ☕
-                </p>
-
-                <p className="mt-2 text-center text-xs text-white/50">
-                  For now, you can support the project by scanning the UPI QR code above.
-                </p>
-
-                <p className="mt-5 text-center text-xs text-white/50">
-                  Donations are completely optional ❤️<br />
-                  Every contribution helps cover hosting and development costs.
-                </p>
-
-              </div>
-            </motion.div>
+          </motion.div>
           )}
-        </AnimatePresence>
+          </AnimatePresence>
 
-        <AnimatePresence>
-          {showSupportPrompt && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-            >
-              <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+          {/* Support modal */}
+          <AnimatePresence>
+            {showSupport && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+              >
+                <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
 
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-display font-bold text-white">
-                    ❤️ Enjoying saavn-dl?
-                  </h2>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-display font-bold text-text-primary">
+                      Support saavn-dl
+                    </h2>
 
-                  <button
-                    onClick={() => setShowSupportPrompt(false)}
-                    className="text-white/50 hover:text-white transition-colors"
-                  >
-                    ✕
-                  </button>
+                    <button
+                      onClick={() => setShowSupport(false)}
+                      className="text-text-muted hover:text-white transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p className="mt-4 text-sm text-white/80 leading-relaxed">
+                    If saavn-dl has been useful to you and you'd like to help cover
+                    hosting costs, you can support the project using UPI.
+                  </p>
+
+                  {/* QR Code */}
+                  <div className="mt-6 flex justify-center">
+                    <img
+                      src="/support-via-upi.jpg"
+                      alt="Support via UPI"
+                      className="w-56 rounded-2xl border border-white/10"
+                    />
+                  </div>
+
+                  <p className="mt-5 text-center text-sm text-white/80">
+                    Ko-fi support will be available soon ☕
+                  </p>
+
+                  <p className="mt-2 text-center text-xs text-white/50">
+                    For now, you can support the project by scanning the UPI QR code above.
+                  </p>
+
+                  <p className="mt-5 text-center text-xs text-white/50">
+                    Donations are completely optional ❤️<br />
+                    Every contribution helps cover hosting and development costs.
+                  </p>
+
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                <p className="mt-4 text-sm text-white/80 leading-relaxed">
-                  If saavn-dl has been useful to you, consider supporting the project.
-                  Every contribution helps cover hosting and development costs.
-                </p>
+          <AnimatePresence>
+            {showSupportPrompt && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+              >
+                <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
 
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowSupportPrompt(false);
-                      setShowSupport(true);
-                    }}
-                    className="flex-1 rounded-xl bg-cyan text-black font-semibold py-3 hover:bg-cyan-dim transition flex items-center justify-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" className="flex-shrink-0">
-                      <path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"></path>
-                      <path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95"></path>
-                      <path d="M2 15l6 6"></path>
-                      <path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"></path>
-                    </svg>
-                    <span>Support</span>
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-display font-bold text-white">
+                      ❤️ Enjoying saavn-dl?
+                    </h2>
 
-                  <button
-                    onClick={() => setShowSupportPrompt(false)}
-                    className="flex-1 rounded-xl border border-border text-white/70 hover:text-white hover:border-white/20 transition"
-                  >
-                    Maybe later
-                  </button>
+                    <button
+                      onClick={() => setShowSupportPrompt(false)}
+                      className="text-white/50 hover:text-white transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p className="mt-4 text-sm text-white/80 leading-relaxed">
+                    If saavn-dl has been useful to you, consider supporting the project.
+                    Every contribution helps cover hosting and development costs.
+                  </p>
+
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowSupportPrompt(false);
+                        setShowSupport(true);
+                      }}
+                      className="flex-1 rounded-xl bg-cyan text-black font-semibold py-3 hover:bg-cyan-dim transition flex items-center justify-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" className="flex-shrink-0">
+                        <path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"></path>
+                        <path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95"></path>
+                        <path d="M2 15l6 6"></path>
+                        <path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"></path>
+                      </svg>
+                      <span>Support</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowSupportPrompt(false)}
+                      className="flex-1 rounded-xl border border-border text-white/70 hover:text-white hover:border-white/20 transition"
+                    >
+                      Maybe later
+                    </button>
+                  </div>
+
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
+        </div>
       </div>
-    </div>
+    </DownloadQueueProvider>
   );
 }
 

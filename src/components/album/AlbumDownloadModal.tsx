@@ -15,6 +15,7 @@ import {
   estimateAlbumSizeMB,
   detectMultiArtist,
 } from '../../utils/albumDownload';
+import { useDownloadQueue } from '../DownloadQueueContext';
 
 type ModalPhase = 'config' | 'downloading' | 'done' | 'error';
 
@@ -52,8 +53,19 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
   const [showMultiArtistPrompt, setShowMultiArtistPrompt] = useState(false);
   const [albumArtistInput, setAlbumArtistInput] = useState(multiArtistInfo.suggestedAlbumArtist);
 
+  const { addAlbum } = useDownloadQueue();
+
   const estimatedMB = estimateAlbumSizeMB(album.songs, quality);
   const warnLarge = estimatedMB > 200;
+
+  const handleBackgroundDownload = () => {
+    // If multi-artist and not yet addressed, resolve it first for the queue
+    const override = multiArtistInfo.isMultiArtist
+      ? (albumArtistOverride !== null ? (albumArtistOverride || undefined) : albumArtistInput.trim() || 'Various Artists')
+      : undefined;
+    addAlbum(album, quality, mode, override);
+    onClose();
+  };
 
   const handleStart = useCallback(async () => {
     // If multi-artist album and user hasn't addressed the prompt yet, show it
@@ -236,16 +248,23 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={onClose}
-                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-display font-medium text-text-secondary hover:text-text-primary hover:border-white/20 transition-all"
+                    className="py-2.5 px-4 rounded-xl border border-border text-sm font-display font-medium text-text-secondary hover:text-text-primary hover:border-white/20 transition-all"
                   >
                     Cancel
                   </button>
                   <motion.button
                     whileTap={{ scale: 0.97 }}
+                    onClick={handleBackgroundDownload}
+                    className="flex-1 py-2.5 rounded-xl border border-violet-400/40 bg-violet-500/10 text-violet-300 text-sm font-display font-semibold hover:bg-violet-500/20 transition-all"
+                  >
+                    Queue It
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
                     onClick={handleStart}
                     className="flex-1 py-2.5 rounded-xl bg-cyan hover:bg-cyan-dim text-black text-sm font-display font-semibold transition-all"
                   >
-                    Download
+                    Download Now
                   </motion.button>
                 </div>
 

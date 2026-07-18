@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { SaavnSong } from '../types/saavn';
+import type { SaavnSong, Quality } from '../types/saavn';
 import { downloadWithMetadata, downloadDirect } from '../utils/download';
 import type { TrackMetadata } from '../types/metadata';
+import { useDownloadQueue } from './DownloadQueueContext';
 
 interface DownloadButtonProps {
   song: SaavnSong;
@@ -12,7 +13,7 @@ interface DownloadButtonProps {
   onDownloadSuccess?: () => void;
 }
 
-type Phase = 'idle' | 'working' | 'done' | 'error';
+type Phase = 'idle' | 'working' | 'done' | 'error' | 'queued';
 
 export default function DownloadButton({ song, quality, overrideMeta, overrideFilename, onDownloadSuccess }: DownloadButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -20,6 +21,7 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState('');
   const [useFFmpeg, setUseFFmpeg] = useState(true);
+  const { addTrack } = useDownloadQueue();
 
   const handleDownload = async () => {
     if (phase === 'working') return;
@@ -61,11 +63,18 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
     }
   };
 
+  const handleQueue = () => {
+    addTrack(song, quality as Quality, overrideMeta, overrideFilename);
+    setPhase('queued');
+    setTimeout(() => setPhase('idle'), 2000);
+  };
+
   const labelMap: Record<Phase, string> = {
     idle: `Download ${quality} kbps`,
     working: stage,
     done: 'Downloaded!',
     error: 'Retry (direct)',
+    queued: 'Added to queue!',
   };
 
   return (
@@ -75,15 +84,16 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
           onClick={handleDownload}
           disabled={phase === 'working'}
           whileTap={{ scale: phase === 'working' ? 1 : 0.97 }}
-          className={`flex-1 relative flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-display font-semibold text-sm transition-all duration-200 overflow-hidden ${
-            phase === 'done'
+          className={`flex-1 relative flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-display font-semibold text-sm transition-all duration-200 overflow-hidden ${phase === 'done'
               ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-400'
-              : phase === 'error'
-              ? 'bg-rose/10 border border-rose/40 text-rose'
-              : phase === 'working'
-              ? 'bg-cyan/5 border border-cyan/20 text-cyan cursor-wait'
-              : 'bg-cyan text-void hover:bg-cyan-dim shadow-glow cursor-pointer'
-          }`}
+              : phase === 'queued'
+                ? 'bg-violet-500/10 border border-violet-500/40 text-violet-400'
+                : phase === 'error'
+                  ? 'bg-rose/10 border border-rose/40 text-rose'
+                  : phase === 'working'
+                    ? 'bg-cyan/5 border border-cyan/20 text-cyan cursor-wait'
+                    : 'bg-cyan text-void hover:bg-cyan-dim shadow-glow cursor-pointer'
+            }`}
         >
           {/* Progress fill */}
           {phase === 'working' && (
@@ -104,6 +114,11 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
+            {phase === 'queued' && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
             {phase === 'idle' && (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -115,16 +130,28 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
           </span>
         </motion.button>
 
+        {/* Queue button */}
+        <button
+          onClick={handleQueue}
+          disabled={phase === 'working'}
+          title="Add to download queue (background)"
+          className="w-8 h-8 rounded-lg border border-border bg-glass text-white/50 hover:border-violet-400/40 hover:text-violet-400 hover:bg-violet-500/10 transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+
         {/* ffmpeg toggle */}
         <div className="flex flex-col items-center gap-0.5">
           <button
             onClick={() => setUseFFmpeg(!useFFmpeg)}
             title={useFFmpeg ? 'Metadata embedding ON (via ffmpeg.wasm)' : 'Direct download (no metadata)'}
-            className={`w-8 h-8 rounded-lg border transition-all text-[10px] font-mono ${
-              useFFmpeg
+            className={`w-8 h-8 rounded-lg border transition-all text-[10px] font-mono ${useFFmpeg
                 ? 'bg-cyan/10 border-cyan/30 text-cyan'
                 : 'bg-glass border-border text-text-muted hover:border-cyan/20'
-            }`}
+              }`}
           >
             {useFFmpeg ? 'M' : 'D'}
           </button>
