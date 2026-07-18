@@ -35,11 +35,12 @@ Designed with a premium glassmorphism-inspired UI.
 - 🔗 Paste any JioSaavn song/album URL or just search by track/album name
 - 🎵 Built-in audio preview player
 - 🎚️ Quality selector up to 320 kbps
-- 🗃️ Built-in metadata editor
+- 🗃️ Built-in metadata editor (per-track, works on both song and album views)
+- 🎛️ Navidrome compatibility — auto-detects multi-artist albums and offers to unify Album Artist tag
 - ⬇️ Download tracks & albums with embedded metadata
 - ⚡ Direct download fallback if ffmpeg fails
 - 📂 Library Sync — stage downloads on a fast SSD and sync to NAS on a schedule
-- 🔒 VPN proxy — all CDN fetches routed server-side, compatible with Gluetun/WireGuard
+- 🔒 VPN proxy — all CDN fetches buffered and routed server-side with retry logic, compatible with Gluetun/WireGuard
 
 ---
 
@@ -250,6 +251,21 @@ SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dis
 | 📚 Save to Library (Album) | Saves tracks directly to a server-side folder (requires `SAAVN_LIBRARY_PATH`) |
 | 🔄 Library Sync | Moves staged files from SSD to NAS (requires both `SAAVN_LIBRARY_PATH` and `SAAVN_MUSIC_PATH`) |
 
+
+---
+
+## Navidrome Compatibility
+
+When downloading multi-artist albums (compilations, "feat." albums), music servers like [Navidrome](https://www.navidrome.org/) will split the album into separate entries if each track has a different Album Artist tag.
+
+saavn-dl automatically detects this and prompts you before downloading:
+
+- If the album has tracks by different artists, a prompt appears asking if you want to set a unified **Album Artist** tag
+- The suggested value is the album's primary artist (or "Various Artists" for compilations)
+- You can edit the value or skip the fix entirely
+- When applied, every track in the batch gets the same `album_artist` metadata, keeping the album grouped as one entry in Navidrome
+
+This works across all album download modes (Individual Files, ZIP, Save to Library).
 
 ---
 

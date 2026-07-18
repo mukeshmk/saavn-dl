@@ -1,4 +1,10 @@
-[ 
+[
+  {
+    "id": 7,
+    "title": "Navidrome Compatibility + Album Metadata Editor",
+    "date": "18-07-2026",
+    "content": "Three improvements in this update: 1) Fixed a download failure (\"Content-Length exceeds response Body\") caused by the proxy forwarding incomplete upstream responses — downloads are now buffered with automatic retry on transient failures. 2) You can now edit metadata per-track in the album view — expand any track and click \"Edit Meta\" before downloading. 3) Multi-artist album detection for Navidrome — saavn-dl now detects albums with tracks by different artists and offers to set a unified Album Artist tag so your music server keeps the album grouped as one entry. Works across all download modes (Individual, ZIP, Library)."
+  },
   {
     "id": 6,
     "title": "Metadata Editor!",
@@ -28,8 +34,8 @@
     "title": "Search Feature Coming Soon!",
     "date": "26-05-2026",
     "content": "I know that many users outside India are facing issues when trying to get access to jiosaavn.com because JioSaavn is only available in India. I'm gonna implement search feature here within next few days so you can just search songs here. No more need to copy links from jiosaavn.com. Stay tuned! Quick solution for now: Use VPN and set location to India, then you can access jiosaavn.com and copy links from there."
-    },
-    {
+  },
+  {
     "id": 1,
     "title": "FFMpeg Update",
     "date": "25-05-2026",
