@@ -20,6 +20,7 @@ Designed with a premium glassmorphism-inspired UI.
 - 🔄 Background download queue — queue multiple songs/albums and keep browsing while they download (with pause, cancel, reorder, and detailed progress)
 - ⚡ Direct download fallback if ffmpeg fails
 - 📂 Library Sync — stage downloads on a fast SSD and sync to NAS on a schedule
+- 🕓 Download History — track what you've downloaded with "already downloaded" badges on search results
 - 🔒 VPN proxy — all CDN fetches buffered and routed server-side with retry logic, compatible with Gluetun/WireGuard
 
 ---
@@ -217,6 +218,11 @@ SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dis
 | `GET` | `/api/library/sync/config` | Current config (schedule, retry limit) |
 | `POST` | `/api/library/sync/config` | Update config |
 | `POST` | `/api/library/sync/reset-retries` | Reset retry count for failed files |
+| `GET` | `/api/history` | List download history entries |
+| `GET` | `/api/history/ids` | Downloaded IDs for badge lookups |
+| `POST` | `/api/history` | Record a new download |
+| `DELETE` | `/api/history` | Clear all history |
+| `DELETE` | `/api/history/:id` | Remove a specific history entry |
 
 ---
 
@@ -237,6 +243,45 @@ Downloads now process in the background without blocking the UI. You can queue m
   - Clear completed or clear the entire queue
 
 All queued downloads continue to route through `/api/proxy` (VPN) when self-hosted.
+
+---
+
+## Download History
+
+saavn-dl keeps track of every song and album you download. A clock icon in the footer opens the History page.
+
+### Features
+
+- **Persistent storage** — history is saved server-side at `SAAVN_LIBRARY_PATH/.saavn-dl-history.json` (falls back to browser localStorage on static deployments like Vercel)
+- **"Already downloaded" badges** — search results show a green checkmark on tracks and albums you've previously downloaded
+- **Filter by type** — view all downloads, or filter to just tracks or just albums
+- **Manage entries** — remove individual items or clear the entire history
+- **Deduplication** — re-downloading the same track/album updates the timestamp rather than creating duplicates
+- **Always available** — the History tab works on both self-hosted and static deployments (server persistence when available, localStorage fallback otherwise)
+
+### What's recorded per entry
+
+| Field | Description |
+|-------|-------------|
+| Title | Song or album name |
+| Artist | Primary artist |
+| Quality | Bitrate downloaded (e.g., 320) |
+| Mode | Download mode (individual, zip, library, direct, ffmpeg) |
+| Song count | Number of tracks (albums only) |
+| Timestamp | When the download completed |
+| Cover art | Album art thumbnail |
+
+### API Endpoints (self-hosted)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/history` | List all entries (optional `?type=track\|album`) |
+| `GET` | `/api/history/ids` | Get downloaded IDs for badge lookups |
+| `POST` | `/api/history` | Add a new entry |
+| `DELETE` | `/api/history` | Clear all history |
+| `DELETE` | `/api/history/:id` | Remove a specific entry |
+
+> The history file is automatically excluded from Library Sync — it won't be moved to your NAS or shown in the Library file browser.
 
 ---
 

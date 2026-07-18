@@ -1,5 +1,11 @@
 [
   {
+    "id": 11,
+    "title": "Download History",
+    "date": "18-07-2026",
+    "content": "saavn-dl now tracks everything you download! A new History page (clock icon in the footer) shows all your past downloads with album art, quality, and timestamps. Search results display a green checkmark on tracks and albums you've already downloaded. History is persisted server-side when self-hosted, or in your browser's localStorage on static deployments. Filter by tracks or albums, remove individual entries, or clear all."
+  },
+  {
     "id": 10,
     "title": "Background Download Queue",
     "date": "18-07-2026",
