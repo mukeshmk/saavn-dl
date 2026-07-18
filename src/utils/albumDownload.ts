@@ -3,11 +3,12 @@ import type { SaavnSong, AlbumDetail } from '../types/saavn';
 import { sanitizeFilename } from './decrypt';
 import { getFFmpeg } from './download';
 import { decryptMediaUrl, getQualityUrl } from './decrypt';
+import { proxyFetch } from './proxy';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type AlbumDownloadMode = 'individual' | 'zip';
+export type AlbumDownloadMode = 'individual' | 'zip' | 'library';
 
 export interface TrackStatus {
   id: string;
@@ -37,9 +38,9 @@ export type FailureCallback = (
 // ─── Size estimation ──────────────────────────────────────────────────────────
 
 const KBPS_TO_BYTES_PER_SEC: Record<string, number> = {
-  '12':  1_500,
-  '48':  6_000,
-  '96':  12_000,
+  '12': 1_500,
+  '48': 6_000,
+  '96': 12_000,
   '160': 20_000,
   '320': 40_000,
 };
@@ -57,8 +58,8 @@ export function estimateAlbumSizeMB(songs: SaavnSong[], quality: string): number
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
+  const a = document.createElement('a');
+  a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
@@ -85,7 +86,7 @@ async function safeDeleteT(ff: FFmpeg, files: string[]): Promise<void> {
 
 function validateT(data: Uint8Array | string, label: string): Uint8Array {
   if (typeof data === 'string') throw new Error(`${label}: string output`);
-  if (data.byteLength < 1024)  throw new Error(`${label}: output too small (${data.byteLength}B)`);
+  if (data.byteLength < 1024) throw new Error(`${label}: output too small (${data.byteLength}B)`);
   return data;
 }
 
@@ -114,10 +115,10 @@ async function trackToBlob(
 
   onProgress('Decrypting…', 8);
   const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
-  const audioUrl  = getQualityUrl(decrypted, quality);
+  const audioUrl = getQualityUrl(decrypted, quality);
 
   onProgress('Fetching audio…', 20);
-  const audioResp = await fetch(audioUrl);
+  const audioResp = await proxyFetch(audioUrl);
   if (!audioResp.ok) throw new Error(`Audio fetch failed: HTTP ${audioResp.status}`);
   const audioBlob = await audioResp.blob();
   if (audioBlob.size < 1024) throw new Error('Audio response is empty — URL may have expired');
@@ -125,7 +126,7 @@ async function trackToBlob(
   onProgress('Fetching cover…', 35);
   let coverData: Uint8Array | null = null;
   try {
-    const imgResp = await fetch(getImageUrlT(song));
+    const imgResp = await proxyFetch(getImageUrlT(song));
     if (imgResp.ok) {
       const imgBlob = await imgResp.blob();
       if (imgBlob.size > 500) coverData = new Uint8Array(await imgBlob.arrayBuffer());
@@ -136,11 +137,11 @@ async function trackToBlob(
   const ff = await getFFmpeg();
 
   const audioData = new Uint8Array(await audioBlob.arrayBuffer());
-  const artist    = getArtistT(song);
-  const meta      = { title: song.title, artist, album: more_info.album, year: song.year };
+  const artist = getArtistT(song);
+  const meta = { title: song.title, artist, album: more_info.album, year: song.year };
 
   // Use song-id-scoped filenames so sequential calls don't collide inside wasm fs
-  const inF  = `in_${song.id}.mp4`;
+  const inF = `in_${song.id}.mp4`;
   const outF = `out_${song.id}.mp4`;
   const covF = `cov_${song.id}.jpg`;
 
@@ -308,7 +309,7 @@ export async function downloadAlbumZip(
     emit(i, 'Starting…', Math.round((i / songs.length) * 88));
 
     let resolved = false;
-    let attempt  = 0;
+    let attempt = 0;
 
     while (!resolved && attempt < 2) {
       try {
@@ -341,7 +342,7 @@ export async function downloadAlbumZip(
 
   emit(songs.length - 1, 'Building ZIP…', 89, 'compressing');
 
-  const zip    = new JSZip();
+  const zip = new JSZip();
   const folder = zip.folder(sanitizeFilename(`${album.title} (${album.year})`))!;
   for (const { filename, blob } of completed) folder.file(filename, blob);
 
@@ -367,4 +368,97 @@ export async function downloadAlbumZip(
     tracks: [...tracks],
     zipStage: 'done',
   });
+}
+
+// ─── Library mode (save to server) ───────────────────────────────────────────
+
+export async function checkLibraryEnabled(): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/config');
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    return !!data.libraryEnabled;
+  } catch {
+    return false;
+  }
+}
+
+async function saveToLibrary(blob: Blob, album: string, filename: string): Promise<void> {
+  const resp = await fetch('/api/library/save', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-Album': album,
+      'X-Filename': filename,
+    },
+    body: blob,
+  });
+
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: 'Unknown server error' }));
+    throw new Error(data.error || `Server responded with ${resp.status}`);
+  }
+}
+
+export async function downloadAlbumLibrary(
+  album: AlbumDetail,
+  quality: string,
+  onProgress: ProgressCallback,
+  onFailure: FailureCallback,
+): Promise<void> {
+  const songs = album.songs;
+  const tracks: TrackStatus[] = songs.map(s => ({ id: s.id, title: s.title, status: 'pending' as const }));
+
+  const albumFolder = `${sanitizeFilename(album.title)} (${album.year})`;
+
+  const emit = (i: number, stage: string, pct: number) =>
+    onProgress({ current: i + 1, total: songs.length, currentTitle: songs[i]?.title ?? '', stage, percent: pct, tracks: [...tracks] });
+
+  for (let i = 0; i < songs.length; i++) {
+    tracks[i] = { ...tracks[i], status: 'downloading' };
+    emit(i, 'Starting…', Math.round((i / songs.length) * 100));
+
+    let attempt = 0;
+    let resolved = false;
+
+    while (!resolved && attempt < 2) {
+      try {
+        const blob = await trackToBlob(songs[i], quality, (stage, p) => {
+          tracks[i] = { ...tracks[i], status: 'downloading' };
+          emit(i, stage, Math.round(((i + p / 100) / songs.length) * 100));
+        });
+
+        // Save to server library instead of triggering browser download
+        const artistName = getArtistT(songs[i]);
+        const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
+
+        emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 100));
+        await saveToLibrary(blob, albumFolder, filename);
+
+        tracks[i] = { ...tracks[i], status: 'done' };
+        resolved = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        if (attempt === 0) {
+          const action = await onFailure(i, songs[i], msg);
+          if (action === 'skip') {
+            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
+            resolved = true;
+          } else {
+            attempt++;
+          }
+        } else {
+          const action = await onFailure(i, songs[i], msg);
+          if (action === 'skip') {
+            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
+          } else {
+            tracks[i] = { ...tracks[i], status: 'failed', error: msg };
+          }
+          resolved = true;
+        }
+      }
+    }
+  }
+
+  onProgress({ current: songs.length, total: songs.length, currentTitle: '', stage: 'Done!', percent: 100, tracks: [...tracks] });
 }

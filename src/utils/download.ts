@@ -2,6 +2,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import type { SaavnSong } from '../types/saavn';
 import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from './decrypt';
+import { proxyFetch } from './proxy';
 import type { TrackMetadata } from '../types/metadata';
 
 // ─── FFmpeg singleton ──────────────────────────────────────────────────────────
@@ -130,14 +131,14 @@ async function embedWithCover(
   audioData: Uint8Array,
   coverData: Uint8Array,
   meta: {
-  title: string;
-  artist: string;
-  albumArtist: string;
-  album: string;
-  year: string;
-  publisher: string;
-  copyright: string;
-},
+    title: string;
+    artist: string;
+    albumArtist: string;
+    album: string;
+    year: string;
+    publisher: string;
+    copyright: string;
+  },
 ): Promise<Uint8Array> {
   await ff.writeFile('in.mp4', audioData);
   await ff.writeFile('cover.jpg', coverData);
@@ -175,14 +176,14 @@ async function embedMetaOnly(
   ff: FFmpeg,
   audioData: Uint8Array,
   meta: {
-  title: string;
-  artist: string;
-  albumArtist: string;
-  album: string;
-  year: string;
-  publisher: string;
-  copyright: string;
-},
+    title: string;
+    artist: string;
+    albumArtist: string;
+    album: string;
+    year: string;
+    publisher: string;
+    copyright: string;
+  },
 ): Promise<Uint8Array> {
   await ff.writeFile('in.mp4', audioData);
 
@@ -222,7 +223,7 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   const audioUrl = getQualityUrl(decrypted, quality);
 
   onProgress?.('Fetching audio…', 18);
-  const audioResp = await fetch(audioUrl);
+  const audioResp = await proxyFetch(audioUrl);
   if (!audioResp.ok) throw new Error(`Audio fetch failed: HTTP ${audioResp.status}`);
   const audioBlob = await audioResp.blob();
   if (audioBlob.size < 1024) throw new Error('Audio response is empty — URL may have expired');
@@ -230,7 +231,7 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   onProgress?.('Fetching cover art…', 32);
   let coverData: Uint8Array | null = null;
   try {
-    const imgResp = await fetch(getImageUrl(song));
+    const imgResp = await proxyFetch(getImageUrl(song));
     if (imgResp.ok) {
       const imgBlob = await imgResp.blob();
       if (imgBlob.size > 500) {
@@ -247,33 +248,33 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   const audioData = new Uint8Array(await audioBlob.arrayBuffer());
   const artist = getArtistTag(song);
   const meta = overrideMeta
-  ? {
-      title:       overrideMeta.title,
-      artist:      overrideMeta.artist,
+    ? {
+      title: overrideMeta.title,
+      artist: overrideMeta.artist,
       albumArtist: overrideMeta.albumArtist,
-      album:       overrideMeta.album,
-      year:        overrideMeta.year,
-      publisher:   more_info.label,
-      copyright:   overrideMeta.copyright,
-      comment:     overrideMeta.comment,
-      genre:       overrideMeta.genre,
+      album: overrideMeta.album,
+      year: overrideMeta.year,
+      publisher: more_info.label,
+      copyright: overrideMeta.copyright,
+      comment: overrideMeta.comment,
+      genre: overrideMeta.genre,
       trackNumber: overrideMeta.trackNumber,
-      discNumber:  overrideMeta.discNumber,
-      composer:    overrideMeta.composer,
+      discNumber: overrideMeta.discNumber,
+      composer: overrideMeta.composer,
     }
-  : {
-      title:       song.title,
+    : {
+      title: song.title,
       artist,
       albumArtist: artist,
-      album:       more_info.album,
-      year:        song.year,
-      publisher:   more_info.label,
-      copyright:   more_info.copyright_text,
-      comment:     'Downloaded via saavn-dl / Rhythmax',
-      genre:       '',
+      album: more_info.album,
+      year: song.year,
+      publisher: more_info.label,
+      copyright: more_info.copyright_text,
+      comment: 'Downloaded via saavn-dl / Rhythmax',
+      genre: '',
       trackNumber: '',
-      discNumber:  '',
-      composer:    '',
+      discNumber: '',
+      composer: '',
     };
 
   let outputData: Uint8Array;
@@ -309,13 +310,13 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   onProgress?.('Done!', 100);
 }
 
-export async function downloadDirect( song: SaavnSong, quality: string, overrideFilename?: string,): Promise<void> {
+export async function downloadDirect(song: SaavnSong, quality: string, overrideFilename?: string,): Promise<void> {
   const { more_info } = song;
   const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
   const audioUrl = getQualityUrl(decrypted, quality);
   const artist = getArtistTag(song);
-  const filename = sanitizeFilename( overrideFilename ?? `${song.title} - ${artist}` ) + '.m4a';
-  const resp = await fetch(audioUrl);
+  const filename = sanitizeFilename(overrideFilename ?? `${song.title} - ${artist}`) + '.m4a';
+  const resp = await proxyFetch(audioUrl);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const blob = await resp.blob();
   if (blob.size < 1024) throw new Error('Received empty file');
