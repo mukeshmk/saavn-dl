@@ -10,6 +10,7 @@ import type { AlbumDownloadMode } from '../utils/albumDownload';
 interface DownloadQueueContextValue {
   items: QueueItem[];
   isProcessing: boolean;
+  isPaused: boolean;
   activeCount: number;
   queuedCount: number;
   totalPending: number;
@@ -17,7 +18,13 @@ interface DownloadQueueContextValue {
   addAlbum: (album: AlbumDetail, quality: Quality, mode: AlbumDownloadMode, albumArtistOverride?: string) => void;
   removeItem: (id: string) => void;
   retryItem: (id: string) => void;
+  cancelCurrent: () => void;
   clearCompleted: () => void;
+  clearAll: () => void;
+  pause: () => void;
+  resume: () => void;
+  moveUp: (id: string) => void;
+  moveDown: (id: string) => void;
 }
 
 const DownloadQueueContext = createContext<DownloadQueueContextValue | null>(null);
@@ -47,7 +54,13 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
 
   const removeItem = useCallback((id: string) => downloadQueue.removeItem(id), []);
   const retryItem = useCallback((id: string) => downloadQueue.retryItem(id), []);
+  const cancelCurrent = useCallback(() => downloadQueue.cancelCurrent(), []);
   const clearCompleted = useCallback(() => downloadQueue.clearCompleted(), []);
+  const clearAll = useCallback(() => downloadQueue.clearAll(), []);
+  const pause = useCallback(() => downloadQueue.pause(), []);
+  const resume = useCallback(() => downloadQueue.resume(), []);
+  const moveUp = useCallback((id: string) => downloadQueue.moveUp(id), []);
+  const moveDown = useCallback((id: string) => downloadQueue.moveDown(id), []);
 
   const activeCount = state.items.filter((i) => i.status === 'downloading').length;
   const queuedCount = state.items.filter((i) => i.status === 'queued').length;
@@ -58,6 +71,7 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
       value={{
         items: state.items,
         isProcessing: state.isProcessing,
+        isPaused: state.isPaused,
         activeCount,
         queuedCount,
         totalPending,
@@ -65,7 +79,13 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
         addAlbum,
         removeItem,
         retryItem,
+        cancelCurrent,
         clearCompleted,
+        clearAll,
+        pause,
+        resume,
+        moveUp,
+        moveDown,
       }}
     >
       {children}

@@ -17,7 +17,7 @@ Designed with a premium glassmorphism-inspired UI.
 - 🗃️ Built-in metadata editor (per-track, works on both song and album views)
 - 🎛️ Navidrome compatibility — auto-detects multi-artist albums and offers to unify Album Artist tag
 - ⬇️ Download tracks & albums with embedded metadata
-- 🔄 Background download queue — queue multiple songs/albums and keep browsing while they download
+- 🔄 Background download queue — queue multiple songs/albums and keep browsing while they download (with pause, cancel, reorder, and detailed progress)
 - ⚡ Direct download fallback if ffmpeg fails
 - 📂 Library Sync — stage downloads on a fast SSD and sync to NAS on a schedule
 - 🔒 VPN proxy — all CDN fetches buffered and routed server-side with retry logic, compatible with Gluetun/WireGuard
@@ -226,8 +226,15 @@ Downloads now process in the background without blocking the UI. You can queue m
 
 - **Queue songs** — click the `+` button next to the download button on any track
 - **Queue albums** — click "Queue It" in the album download modal
+- **Navidrome fix applied automatically** — multi-artist albums queued in the background get a unified Album Artist tag without manual intervention
 - **Download indicator** — a floating button appears in the top-right showing the active download, progress, and queue count
-- **Download manager** — click the indicator to open a slide-in panel showing all active, queued, completed, and failed downloads with retry/remove controls
+- **Download manager** — click the indicator to open a slide-in panel with full queue management:
+  - Cancel the active download
+  - Pause / resume the entire queue
+  - Reorder queued items (move up/down)
+  - Retry failed or cancelled downloads
+  - Expand any item for details (quality, mode, track list, errors, album artist info)
+  - Clear completed or clear the entire queue
 
 All queued downloads continue to route through `/api/proxy` (VPN) when self-hosted.
 

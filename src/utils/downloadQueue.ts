@@ -7,7 +7,7 @@ import type { AlbumDownloadMode, AlbumDownloadProgress } from './albumDownload';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type QueueItemType = 'track' | 'album';
-export type QueueItemStatus = 'queued' | 'downloading' | 'done' | 'failed';
+export type QueueItemStatus = 'queued' | 'downloading' | 'done' | 'failed' | 'cancelled';
 
 export interface QueueTrackItem {
   id: string;
@@ -19,6 +19,7 @@ export interface QueueTrackItem {
   progress: number;
   stage: string;
   error?: string;
+  addedAt: number;
   song: SaavnSong;
   quality: Quality;
   overrideMeta?: TrackMetadata;
@@ -35,6 +36,7 @@ export interface QueueAlbumItem {
   progress: number;
   stage: string;
   error?: string;
+  addedAt: number;
   album: AlbumDetail;
   quality: Quality;
   mode: AlbumDownloadMode;
@@ -47,6 +49,7 @@ export type QueueItem = QueueTrackItem | QueueAlbumItem;
 export interface QueueState {
   items: QueueItem[];
   isProcessing: boolean;
+  isPaused: boolean;
 }
 
 export type QueueListener = (state: QueueState) => void;
@@ -56,7 +59,10 @@ export type QueueListener = (state: QueueState) => void;
 class DownloadQueueManager {
   private items: QueueItem[] = [];
   private isProcessing = false;
+  private isPaused = false;
   private listeners: Set<QueueListener> = new Set();
+  private abortController: AbortController | null = null;
+  private cancelled = false;
 
   subscribe(listener: QueueListener): () => void {
     this.listeners.add(listener);
@@ -65,7 +71,7 @@ class DownloadQueueManager {
   }
 
   getState(): QueueState {
-    return { items: [...this.items], isProcessing: this.isProcessing };
+    return { items: [...this.items], isProcessing: this.isProcessing, isPaused: this.isPaused };
   }
 
   private emit(): void {
@@ -74,6 +80,8 @@ class DownloadQueueManager {
       listener(state);
     }
   }
+
+  // ── Add items ─────────────────────────────────────────────────────────────
 
   addTrack(
     song: SaavnSong,
@@ -95,6 +103,7 @@ class DownloadQueueManager {
       status: 'queued',
       progress: 0,
       stage: 'Queued',
+      addedAt: Date.now(),
       song,
       quality,
       overrideMeta,
@@ -124,6 +133,7 @@ class DownloadQueueManager {
       status: 'queued',
       progress: 0,
       stage: 'Queued',
+      addedAt: Date.now(),
       album,
       quality,
       mode,
@@ -135,25 +145,34 @@ class DownloadQueueManager {
     this.processNext();
   }
 
+  // ── Remove / Cancel ───────────────────────────────────────────────────────
+
   removeItem(id: string): void {
     const idx = this.items.findIndex((i) => i.id === id);
     if (idx === -1) return;
     const item = this.items[idx];
-    // Only remove if not currently downloading
-    if (item.status !== 'downloading') {
+    if (item.status === 'downloading') {
+      // Cancel active download
+      this.cancelCurrent();
+    } else {
       this.items.splice(idx, 1);
-      this.emit();
     }
-  }
-
-  clearCompleted(): void {
-    this.items = this.items.filter((i) => i.status !== 'done' && i.status !== 'failed');
     this.emit();
   }
 
+  cancelCurrent(): void {
+    if (!this.isProcessing) return;
+    this.cancelled = true;
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+  }
+
+  // ── Retry ─────────────────────────────────────────────────────────────────
+
   retryItem(id: string): void {
     const item = this.items.find((i) => i.id === id);
-    if (!item || item.status !== 'failed') return;
+    if (!item || (item.status !== 'failed' && item.status !== 'cancelled')) return;
     item.status = 'queued';
     item.progress = 0;
     item.stage = 'Queued (retry)';
@@ -162,13 +181,77 @@ class DownloadQueueManager {
     this.processNext();
   }
 
+  // ── Clear ─────────────────────────────────────────────────────────────────
+
+  clearCompleted(): void {
+    this.items = this.items.filter((i) => i.status !== 'done' && i.status !== 'failed' && i.status !== 'cancelled');
+    this.emit();
+  }
+
+  clearAll(): void {
+    // Cancel active download if any
+    if (this.isProcessing) {
+      this.cancelCurrent();
+    }
+    // Remove all non-active items
+    this.items = this.items.filter((i) => i.status === 'downloading');
+    this.emit();
+  }
+
+  // ── Pause / Resume ────────────────────────────────────────────────────────
+
+  pause(): void {
+    this.isPaused = true;
+    this.emit();
+  }
+
+  resume(): void {
+    this.isPaused = false;
+    this.emit();
+    this.processNext();
+  }
+
+  // ── Reorder ───────────────────────────────────────────────────────────────
+
+  moveUp(id: string): void {
+    const idx = this.items.findIndex((i) => i.id === id);
+    if (idx <= 0) return;
+    const item = this.items[idx];
+    if (item.status !== 'queued') return;
+    // Find the previous queued item to swap with
+    let prevIdx = -1;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (this.items[i].status === 'queued') { prevIdx = i; break; }
+    }
+    if (prevIdx === -1) return;
+    [this.items[prevIdx], this.items[idx]] = [this.items[idx], this.items[prevIdx]];
+    this.emit();
+  }
+
+  moveDown(id: string): void {
+    const idx = this.items.findIndex((i) => i.id === id);
+    if (idx === -1 || idx >= this.items.length - 1) return;
+    const item = this.items[idx];
+    if (item.status !== 'queued') return;
+    // Find the next queued item to swap with
+    const nextIdx = this.items.slice(idx + 1).findIndex((i) => i.status === 'queued');
+    if (nextIdx === -1) return;
+    const actualNextIdx = idx + 1 + nextIdx;
+    [this.items[idx], this.items[actualNextIdx]] = [this.items[actualNextIdx], this.items[idx]];
+    this.emit();
+  }
+
+  // ── Processing ────────────────────────────────────────────────────────────
+
   private async processNext(): Promise<void> {
-    if (this.isProcessing) return;
+    if (this.isProcessing || this.isPaused) return;
 
     const next = this.items.find((i) => i.status === 'queued');
     if (!next) return;
 
     this.isProcessing = true;
+    this.cancelled = false;
+    this.abortController = new AbortController();
     next.status = 'downloading';
     next.stage = 'Starting…';
     this.emit();
@@ -179,20 +262,34 @@ class DownloadQueueManager {
       } else {
         await this.processAlbum(next);
       }
-      next.status = 'done';
-      next.progress = 100;
-      next.stage = 'Done!';
+
+      if (this.cancelled) {
+        next.status = 'cancelled';
+        next.stage = 'Cancelled';
+      } else {
+        next.status = 'done';
+        next.progress = 100;
+        next.stage = 'Done!';
+      }
     } catch (err) {
-      next.status = 'failed';
-      next.error = err instanceof Error ? err.message : 'Download failed';
-      next.stage = 'Failed';
+      if (this.cancelled) {
+        next.status = 'cancelled';
+        next.stage = 'Cancelled';
+      } else {
+        next.status = 'failed';
+        next.error = err instanceof Error ? err.message : 'Download failed';
+        next.stage = 'Failed';
+      }
     }
 
     this.isProcessing = false;
+    this.abortController = null;
     this.emit();
 
     // Process next in queue
-    this.processNext();
+    if (!this.isPaused) {
+      this.processNext();
+    }
   }
 
   private async processTrack(item: QueueTrackItem): Promise<void> {
@@ -200,6 +297,7 @@ class DownloadQueueManager {
       song: item.song,
       quality: item.quality,
       onProgress: (stage, percent) => {
+        if (this.cancelled) return;
         item.stage = stage;
         item.progress = percent;
         this.emit();
@@ -211,6 +309,7 @@ class DownloadQueueManager {
 
   private async processAlbum(item: QueueAlbumItem): Promise<void> {
     const onProgress = (p: AlbumDownloadProgress) => {
+      if (this.cancelled) return;
       item.trackProgress = p;
       item.progress = p.percent;
       item.stage = p.zipStage

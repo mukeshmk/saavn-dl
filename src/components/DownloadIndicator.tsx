@@ -7,11 +7,11 @@ interface Props {
 }
 
 export default function DownloadIndicator({ onClick }: Props) {
-  const { items, totalPending, isProcessing } = useDownloadQueue();
+  const { items, totalPending, isProcessing, isPaused } = useDownloadQueue();
 
   const activeItem = items.find((i) => i.status === 'downloading');
   const hasItems = items.length > 0;
-  const hasFailures = items.some((i) => i.status === 'failed');
+  const hasFailures = items.some((i) => i.status === 'failed' || i.status === 'cancelled');
 
   if (!hasItems) return null;
 
@@ -61,6 +61,10 @@ export default function DownloadIndicator({ onClick }: Props) {
         ) : hasFailures ? (
           <p className="text-[11px] font-display font-semibold text-rose">
             Download failed
+          </p>
+        ) : isPaused ? (
+          <p className="text-[11px] font-display font-semibold text-amber-400">
+            Queue paused
           </p>
         ) : (
           <p className="text-[11px] font-display font-semibold text-emerald-400">
