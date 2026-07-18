@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { AlbumDetail, SaavnSong } from '../../types/saavn';
 import { albumImage, proxyImage, totalAlbumDuration, formatDuration } from '../../types/saavn';
 import AudioPreview from '../AudioPreview';
 import DownloadButton from '../DownloadButton';
+import MetadataEditor from '../MetadataEditor';
 import QualitySelector from '../QualitySelector';
 import AlbumDownloadModal from './AlbumDownloadModal';
 import type { Quality } from '../../types/saavn';
+import type { TrackMetadata } from '../../types/metadata';
+import { buildDefaultMetadata, metadataIsModified } from '../../types/metadata';
 
 interface Props {
   album: AlbumDetail;
@@ -14,15 +17,15 @@ interface Props {
 }
 
 export default function AlbumPage({ album, onBack }: Props) {
-  const [showModal, setShowModal]       = useState(false);
-  const [expandedId, setExpandedId]     = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [globalQuality, setGlobalQuality] = useState<Quality>('320');
-  const [imgError, setImgError]         = useState(false);
-  const [imgLoaded, setImgLoaded]       = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
-  const coverUrl   = albumImage(album.image);
-  const artists    = album.artists?.primary?.map(a => a.name).join(', ') || album.subtitle;
-  const totalDur   = totalAlbumDuration(album.songs);
+  const coverUrl = albumImage(album.image);
+  const artists = album.artists?.primary?.map(a => a.name).join(', ') || album.subtitle;
+  const totalDur = totalAlbumDuration(album.songs);
 
   return (
     <>
@@ -43,7 +46,7 @@ export default function AlbumPage({ album, onBack }: Props) {
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
               className="group-hover:-translate-x-0.5 transition-transform">
-              <polyline points="15 18 9 12 15 6"/>
+              <polyline points="15 18 9 12 15 6" />
             </svg>
             Back to results
           </motion.button>
@@ -73,9 +76,9 @@ export default function AlbumPage({ album, onBack }: Props) {
                   {imgError && (
                     <div className="w-full h-full flex items-center justify-center text-white/60/30">
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <polyline points="21 15 16 10 5 21"/>
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
                       </svg>
                     </div>
                   )}
@@ -125,9 +128,9 @@ export default function AlbumPage({ album, onBack }: Props) {
                     style={{ boxShadow: '0 0 20px rgba(0,212,255,0.25)' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
                     Download Album
                   </motion.button>
@@ -170,9 +173,9 @@ export default function AlbumPage({ album, onBack }: Props) {
               className="flex items-center gap-1.5 text-[11px] font-mono text-white/60 hover:text-violet-400 transition-colors w-fit"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
               </svg>
               Open on JioSaavn
             </a>
@@ -203,22 +206,31 @@ interface TrackRowProps {
 function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps) {
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [showMetaEditor, setShowMetaEditor] = useState(false);
+  const [originalMeta, setOriginalMeta] = useState<TrackMetadata | null>(null);
+  const [editedMeta, setEditedMeta] = useState<TrackMetadata | null>(null);
 
-  const duration  = song.more_info?.duration ? formatDuration(song.more_info.duration) : null;
-  const artist    = song.subtitle?.split(' - ')[0]?.trim()
+  useEffect(() => {
+    const meta = buildDefaultMetadata(song);
+    setOriginalMeta(meta);
+    setEditedMeta(meta);
+  }, [song.id]);
+
+  const duration = song.more_info?.duration ? formatDuration(song.more_info.duration) : null;
+  const artist = song.subtitle?.split(' - ')[0]?.trim()
     || song.more_info?.artists?.primary?.[0]?.name
     || '';
 
   const thumbUrl = proxyImage(song.image, '150x150');
+  const metaModified = originalMeta && editedMeta && metadataIsModified(originalMeta, editedMeta);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
-      className={`rounded-xl border transition-all duration-200 ${
-        isExpanded ? 'border-border bg-surface' : 'border-transparent hover:border-border hover:bg-surface/60'
-      }`}
+      className={`rounded-xl border transition-all duration-200 ${isExpanded ? 'border-border bg-surface' : 'border-transparent hover:border-border hover:bg-surface/60'
+        }`}
     >
       {/* Row header — always visible */}
       <button
@@ -246,7 +258,7 @@ function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps)
           {imgError && (
             <div className="w-full h-full flex items-center justify-center text-white/60/30">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+                <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" />
               </svg>
             </div>
           )}
@@ -278,7 +290,7 @@ function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps)
             className="text-white/60"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="6 9 12 15 18 9"/>
+              <polyline points="6 9 12 15 18 9" />
             </svg>
           </motion.span>
         </div>
@@ -300,10 +312,47 @@ function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps)
               {song.more_info?.vlink && (
                 <AudioPreview vlink={song.more_info.vlink} title={song.title} />
               )}
-              {/* Download */}
-              <DownloadButton song={song} quality={quality} />
+              {/* Edit Meta + Download */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowMetaEditor(true)}
+                  className={`px-3 py-2 rounded-xl border transition-all duration-200 text-[11px] font-display font-medium whitespace-nowrap ${metaModified
+                      ? 'border-white/20 bg-white/5 text-white/80 hover:bg-white/10'
+                      : 'border-border bg-glass text-white/40 hover:border-cyan/30 hover:text-white/60'
+                    }`}
+                >
+                  {metaModified ? 'Meta Updated' : 'Edit Meta'}
+                </button>
+                <div className="flex-1">
+                  <DownloadButton
+                    song={song}
+                    quality={quality}
+                    overrideMeta={metaModified ? editedMeta! : undefined}
+                    overrideFilename={metaModified ? editedMeta!.filename : undefined}
+                  />
+                </div>
+              </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Metadata editor modal */}
+      <AnimatePresence>
+        {showMetaEditor && originalMeta && editedMeta && (
+          <MetadataEditor
+            original={originalMeta}
+            current={editedMeta}
+            onUpdate={(meta) => {
+              setEditedMeta(meta);
+              setShowMetaEditor(false);
+            }}
+            onReset={() => {
+              setEditedMeta(originalMeta);
+              setShowMetaEditor(false);
+            }}
+            onClose={() => setShowMetaEditor(false)}
+          />
         )}
       </AnimatePresence>
     </motion.div>
