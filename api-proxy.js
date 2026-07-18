@@ -115,14 +115,26 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
     const contentType = proxyRes.headers['content-type'];
     if (contentType) res.setHeader('Content-Type', contentType);
 
-    const contentLength = proxyRes.headers['content-length'];
-    if (contentLength) res.setHeader('Content-Length', contentLength);
-
-    // Allow browser to read response (CORS)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
-    res.writeHead(proxyRes.statusCode || 200);
-    proxyRes.pipe(res);
+    // Buffer the entire upstream response before sending to client.
+    // This prevents "Content-Length exceeds response Body" errors when
+    // the upstream CDN drops the connection mid-stream — we only send
+    // Content-Length once we know the actual received byte count.
+    const chunks = [];
+    proxyRes.on('data', (chunk) => chunks.push(chunk));
+    proxyRes.on('end', () => {
+      const body = Buffer.concat(chunks);
+      res.setHeader('Content-Length', body.length);
+      // Allow browser to read response (CORS)
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.writeHead(proxyRes.statusCode || 200);
+      res.end(body);
+    });
+    proxyRes.on('error', (err) => {
+      console.error('[api-proxy] Upstream read error:', err.message);
+      if (!res.headersSent) {
+        jsonResponse(res, 502, { error: `Upstream read failed: ${err.message}` });
+      }
+    });
   });
 
   proxyReq.on('error', (err) => {
