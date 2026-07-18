@@ -16,11 +16,7 @@ WORKDIR /app
 
 # Copy the built frontend and the server modules
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/server.js ./server.js
-COPY --from=build /app/sync-manager.js ./sync-manager.js
-COPY --from=build /app/sync-scheduler.js ./sync-scheduler.js
-COPY --from=build /app/api-library.js ./api-library.js
-COPY --from=build /app/api-proxy.js ./api-proxy.js
+COPY --from=build /app/server ./server
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/package-lock.json ./package-lock.json
 
@@ -36,4 +32,4 @@ ENV PORT=80
 
 EXPOSE 80
 
-CMD ["node", "server.js"]
+CMD ["node", "server/index.js"]

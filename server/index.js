@@ -14,9 +14,9 @@ import { createServer } from 'node:http';
 import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
 import { join, extname, resolve, normalize } from 'node:path';
 import { existsSync } from 'node:fs';
-import { handleLibraryRoute } from './api-library.js';
-import { handleProxyRoute } from './api-proxy.js';
-import { initScheduler } from './sync-scheduler.js';
+import { handleLibraryRoute } from './library/routes.js';
+import { handleProxyRoute } from './proxy.js';
+import { initScheduler } from './library/sync-scheduler.js';
 
 const PORT = parseInt(process.env.PORT || '80', 10);
 const STATIC_DIR = resolve(process.env.STATIC_DIR || './dist');

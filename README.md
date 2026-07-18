@@ -148,7 +148,7 @@ Tracks are saved as: `/music/<Album Name> (Year)/01 - Song Title - Artist.m4a`
 
 ```bash
 npm run build
-SAAVN_LIBRARY_PATH=/path/to/music PORT=8080 STATIC_DIR=./dist node server.js
+SAAVN_LIBRARY_PATH=/path/to/music PORT=8080 STATIC_DIR=./dist node server/index.js
 ```
 
 ### Development (with Vite proxy)
@@ -157,7 +157,7 @@ If you want hot reload during development while still testing the library featur
 
 ```bash
 # Terminal 1 — API server
-SAAVN_LIBRARY_PATH=/tmp/my-music PORT=3001 STATIC_DIR=./dist node server.js
+SAAVN_LIBRARY_PATH=/tmp/my-music PORT=3001 STATIC_DIR=./dist node server/index.js
 
 # Terminal 2 — Vite dev server (proxies /api → port 3001)
 npm run dev
@@ -203,7 +203,7 @@ docker run -p 8080:80 \
 
 ```bash
 npm run build
-SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dist node server.js
+SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dist node server/index.js
 ```
 
 ### API Endpoints
