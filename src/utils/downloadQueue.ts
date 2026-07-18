@@ -1,7 +1,7 @@
 import type { SaavnSong, AlbumDetail, Quality } from '../types/saavn';
 import type { TrackMetadata } from '../types/metadata';
 import { downloadWithMetadata } from './download';
-import { downloadAlbumIndividual, downloadAlbumZip, downloadAlbumLibrary } from './albumDownload';
+import { downloadAlbumIndividual, downloadAlbumZip, downloadAlbumLibrary, detectMultiArtist } from './albumDownload';
 import type { AlbumDownloadMode, AlbumDownloadProgress } from './albumDownload';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -226,12 +226,22 @@ class DownloadQueueManager {
     // Auto-skip failures in background mode (no interactive prompt)
     const onFailure = async (): Promise<'skip' | 'retry'> => 'retry';
 
+    // Navidrome fix: if no override was provided, auto-detect multi-artist albums
+    // and apply a unified Album Artist tag so they don't get split
+    let albumArtist = item.albumArtistOverride;
+    if (!albumArtist) {
+      const multiArtistInfo = detectMultiArtist(item.album);
+      if (multiArtistInfo.isMultiArtist) {
+        albumArtist = multiArtistInfo.suggestedAlbumArtist;
+      }
+    }
+
     if (item.mode === 'zip') {
-      await downloadAlbumZip(item.album, item.quality, onProgress, onFailure, item.albumArtistOverride);
+      await downloadAlbumZip(item.album, item.quality, onProgress, onFailure, albumArtist);
     } else if (item.mode === 'library') {
-      await downloadAlbumLibrary(item.album, item.quality, onProgress, onFailure, item.albumArtistOverride);
+      await downloadAlbumLibrary(item.album, item.quality, onProgress, onFailure, albumArtist);
     } else {
-      await downloadAlbumIndividual(item.album, item.quality, onProgress, onFailure, item.albumArtistOverride);
+      await downloadAlbumIndividual(item.album, item.quality, onProgress, onFailure, albumArtist);
     }
   }
 }
