@@ -15,6 +15,7 @@ import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
 import { join, extname, resolve, normalize } from 'node:path';
 import { existsSync } from 'node:fs';
 import { handleLibraryRoute } from './library/routes.js';
+import { handleHistoryRoute } from './history/routes.js';
 import { handleProxyRoute } from './proxy.js';
 import { initScheduler } from './library/sync-scheduler.js';
 
@@ -90,6 +91,7 @@ async function handleApiConfig(req, res) {
   jsonResponse(res, 200, {
     libraryEnabled: !!LIBRARY_PATH,
     musicPathEnabled: !!MUSIC_PATH,
+    historyEnabled: true,
   });
 }
 
@@ -212,6 +214,11 @@ const server = createServer(async (req, res) => {
     // Library sync routes (/api/library/* except /save)
     if (url.pathname.startsWith('/api/library/') && url.pathname !== '/api/library/save') {
       const handled = await handleLibraryRoute(req, res, url, jsonResponse);
+      if (handled !== false) return;
+    }
+    // Download history routes (/api/history*)
+    if (url.pathname === '/api/history' || url.pathname.startsWith('/api/history/')) {
+      const handled = await handleHistoryRoute(req, res, url, jsonResponse);
       if (handled !== false) return;
     }
 

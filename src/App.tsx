@@ -8,6 +8,7 @@ import AlbumPage from './components/album/AlbumPage';
 import AlbumSkeleton from './components/album/AlbumSkeleton';
 import AlbumResultCard from './components/album/AlbumResultCard';
 import LibraryPage from './components/library/LibraryPage';
+import HistoryPage from './components/history/HistoryPage';
 import ArtistPage from './components/artist/ArtistPage';
 import ArtistResultCard from './components/artist/ArtistResultCard';
 import { DownloadQueueProvider } from './components/DownloadQueueContext';
@@ -17,6 +18,8 @@ import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail, ArtistSea
 import { searchSongs } from './utils/search';
 import { searchAlbums, fetchAlbumDetail } from './utils/album';
 import { searchArtists, fetchArtistDetail } from './utils/artist';
+import { getDownloadedIds } from './utils/history';
+import type { DownloadedIds } from './utils/history';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,7 +55,9 @@ type View =
   // ── Errors ──
   | { type: 'error'; message: string; context: 'url' | 'search' }
   // ── Library ──
-  | { type: 'library' };
+  | { type: 'library' }
+  // ── History ──
+  | { type: 'history' };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +83,7 @@ export default function App() {
   const [updates, setUpdates] = useState<UpdateItem[]>([]);
   const [showDownloadPanel, setShowDownloadPanel] = useState(false);
   const [musicPathEnabled, setMusicPathEnabled] = useState(false);
+  const [downloadedIds, setDownloadedIds] = useState<DownloadedIds>({ tracks: [], albums: [] });
   const lastSongSearch = useRef<{ results: SearchResult[]; query: string } | null>(null);
   const lastAlbumSearch = useRef<{ results: AlbumSearchResult[]; query: string } | null>(null);
   const lastArtistSearch = useRef<{ results: ArtistSearchResult[]; query: string } | null>(null);
@@ -91,6 +97,11 @@ export default function App() {
       if (data.musicPathEnabled) setMusicPathEnabled(true);
     }).catch(() => { });
   }, []);
+
+  // Load downloaded IDs for "already downloaded" badges
+  useEffect(() => {
+    getDownloadedIds().then(setDownloadedIds).catch(() => { });
+  }, [view.type]);
 
   // ── Song URL fetch ────────────────────────────────────────────────────────
 
@@ -260,6 +271,10 @@ export default function App() {
   const showArtistResults = ['searching-artists', 'artist-results', 'fetching-artist-detail'].includes(view.type) || (view.type === 'error' && view.context === 'search' && searchTab === 'artists');
   const showSearch = showSongResults || showAlbumResults || showArtistResults;
 
+  // Memoize downloaded ID sets for badge checks
+  const downloadedTrackIds = new Set(downloadedIds.tracks);
+  const downloadedAlbumIds = new Set(downloadedIds.albums);
+
   return (
     <DownloadQueueProvider>
       <div className="min-h-screen bg-void relative overflow-x-hidden">
@@ -380,6 +395,11 @@ export default function App() {
                 <LibraryPage onBack={() => setView({ type: 'idle' })} />
               )}
 
+              {/* History page */}
+              {view.type === 'history' && (
+                <HistoryPage onBack={() => setView({ type: 'idle' })} />
+              )}
+
               {/* Song search results */}
               {showSongResults && (
                 <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -396,6 +416,7 @@ export default function App() {
                     fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
                     onSelect={handleSongResultSelect}
                     error={view.type === 'error' && view.context === 'search' ? view.message : ''}
+                    downloadedTrackIds={downloadedTrackIds}
                   />
                 </motion.div>
               )}
@@ -407,6 +428,7 @@ export default function App() {
                   <AlbumResultsPanel
                     view={view}
                     onSelect={handleAlbumResultSelect}
+                    downloadedAlbumIds={downloadedAlbumIds}
                   />
                 </motion.div>
               )}
@@ -449,6 +471,15 @@ export default function App() {
                 </svg>
               </button>
             )}
+            {/* History */}
+            <button onClick={() => setView({ type: 'history' })}
+              className="w-10 h-10 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200"
+              aria-label="Download History">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </button>
           </motion.div>
 
           {/* Updates modal */}
@@ -491,9 +522,11 @@ export default function App() {
 function AlbumResultsPanel({
   view,
   onSelect,
+  downloadedAlbumIds,
 }: {
   view: View;
   onSelect: (r: AlbumSearchResult) => void;
+  downloadedAlbumIds?: Set<string>;
 }) {
   const isSearching = view.type === 'searching-albums';
   const results = view.type === 'album-results' || view.type === 'fetching-album-result' ? view.results : [];
@@ -579,6 +612,7 @@ function AlbumResultsPanel({
             onSelect={onSelect}
             isLoading={fetchingId === album.id}
             anyLoading={isFetching}
+            isDownloaded={downloadedAlbumIds?.has(album.id)}
           />
         ))}
       </div>

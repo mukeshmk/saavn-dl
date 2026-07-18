@@ -14,6 +14,10 @@ import { existsSync } from 'node:fs';
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
 const CONFIG_FILENAME = '.saavn-dl-sync.json';
+const HISTORY_FILENAME = '.saavn-dl-history.json';
+
+// Files to skip during browse and sync
+const SKIP_FILES = new Set([CONFIG_FILENAME, HISTORY_FILENAME]);
 
 // ─── Default config ───────────────────────────────────────────────────────────
 
@@ -90,8 +94,8 @@ export async function browse(relativePath = '') {
   const entries = [];
 
   for (const entry of dirEntries) {
-    // Skip the config file
-    if (entry.name === CONFIG_FILENAME) continue;
+    // Skip internal metadata files
+    if (SKIP_FILES.has(entry.name)) continue;
 
     const entryPath = join(targetPath, entry.name);
     const entryStat = await stat(entryPath);
@@ -159,8 +163,8 @@ async function walkDir(dirPath, basePath, files = []) {
     if (entry.isDirectory()) {
       await walkDir(fullPath, basePath, files);
     } else if (entry.isFile()) {
-      // Skip config file
-      if (entry.name === CONFIG_FILENAME) continue;
+      // Skip internal metadata files
+      if (SKIP_FILES.has(entry.name)) continue;
       files.push(relative(basePath, fullPath));
     }
   }
@@ -180,8 +184,8 @@ async function removeEmptyDirs(dirPath, basePath) {
 
   try {
     const entries = await readdir(dirPath);
-    // Filter out the config file when checking if directory is "empty"
-    const realEntries = entries.filter(e => e !== CONFIG_FILENAME);
+    // Filter out internal metadata files when checking if directory is "empty"
+    const realEntries = entries.filter(e => !SKIP_FILES.has(e));
     if (realEntries.length === 0) {
       await rm(dirPath, { recursive: true });
       // Try parent

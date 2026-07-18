@@ -9,9 +9,10 @@ interface Props {
   onSelect: (album: AlbumSearchResult) => void;
   isLoading: boolean;
   anyLoading: boolean;
+  isDownloaded?: boolean;
 }
 
-export default function AlbumResultCard({ album, index, onSelect, isLoading, anyLoading }: Props) {
+export default function AlbumResultCard({ album, index, onSelect, isLoading, anyLoading, isDownloaded }: Props) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -20,7 +21,7 @@ export default function AlbumResultCard({ album, index, onSelect, isLoading, any
     || 'Various Artists';
 
   const thumbUrl = proxyImage(album.image, '150x150');
-  const dimmed   = anyLoading && !isLoading;
+  const dimmed = anyLoading && !isLoading;
 
   return (
     <motion.button
@@ -29,13 +30,12 @@ export default function AlbumResultCard({ album, index, onSelect, isLoading, any
       transition={{ duration: 0.22, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => !anyLoading && onSelect(album)}
       disabled={anyLoading}
-      className={`group w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-        isLoading
-          ? 'border-cyan-500/40 bg-cyan-500/5 cursor-wait'
-          : anyLoading
+      className={`group w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${isLoading
+        ? 'border-cyan-500/40 bg-cyan-500/5 cursor-wait'
+        : anyLoading
           ? 'border-border bg-glass cursor-not-allowed'
           : 'border-border bg-glass hover:border-cyan-500/40 hover:bg-cyan-500/5 cursor-pointer active:scale-[0.99]'
-      }`}
+        }`}
     >
       {/* Thumbnail */}
       <div className="relative flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-border">
@@ -55,8 +55,8 @@ export default function AlbumResultCard({ album, index, onSelect, isLoading, any
         {imgError && (
           <div className="w-full h-full flex items-center justify-center text-text-muted/40">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
             </svg>
           </div>
         )}
@@ -71,13 +71,19 @@ export default function AlbumResultCard({ album, index, onSelect, isLoading, any
       {/* Text */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className={`text-sm font-display font-semibold leading-tight truncate transition-colors duration-150 ${
-            isLoading ? 'text-cyan-300' : 'text-text-primary group-hover:text-violet-300'
-          }`}>
+          <span className={`text-sm font-display font-semibold leading-tight truncate transition-colors duration-150 ${isLoading ? 'text-cyan-300' : 'text-text-primary group-hover:text-violet-300'
+            }`}>
             {album.title}
           </span>
           {album.isExplicit && (
             <span className="flex-shrink-0 px-1 py-0.5 bg-rose/10 border border-rose/25 text-rose text-[9px] font-bold font-mono rounded uppercase leading-none">E</span>
+          )}
+          {isDownloaded && (
+            <span className="flex-shrink-0 px-1 py-0.5 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-bold font-mono rounded leading-none flex items-center gap-0.5">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
           )}
         </div>
         <p className="text-xs text-text-secondary font-body mt-0.5 truncate">{primaryArtist}</p>

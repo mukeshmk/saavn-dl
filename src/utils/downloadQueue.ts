@@ -3,6 +3,7 @@ import type { TrackMetadata } from '../types/metadata';
 import { downloadWithMetadata } from './download';
 import { downloadAlbumIndividual, downloadAlbumZip, downloadAlbumLibrary, detectMultiArtist } from './albumDownload';
 import type { AlbumDownloadMode, AlbumDownloadProgress } from './albumDownload';
+import { recordDownload } from './history';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,9 @@ class DownloadQueueManager {
         next.status = 'done';
         next.progress = 100;
         next.stage = 'Done!';
+
+        // Record to download history
+        this.recordToHistory(next).catch(() => { /* best-effort */ });
       }
     } catch (err) {
       if (this.cancelled) {
@@ -341,6 +345,36 @@ class DownloadQueueManager {
       await downloadAlbumLibrary(item.album, item.quality, onProgress, onFailure, albumArtist);
     } else {
       await downloadAlbumIndividual(item.album, item.quality, onProgress, onFailure, albumArtist);
+    }
+  }
+
+  // ── History recording ─────────────────────────────────────────────────────
+
+  private async recordToHistory(item: QueueItem): Promise<void> {
+    if (item.type === 'track') {
+      await recordDownload({
+        saavnId: item.song.id,
+        type: 'track',
+        title: item.title,
+        artist: item.artist,
+        album: item.song.more_info?.album || '',
+        image: item.song.image || '',
+        quality: item.quality,
+        mode: '',
+        songCount: 0,
+      });
+    } else {
+      await recordDownload({
+        saavnId: item.album.id,
+        type: 'album',
+        title: item.title,
+        artist: item.artist,
+        album: item.title,
+        image: item.album.image || '',
+        quality: item.quality,
+        mode: item.mode,
+        songCount: item.album.songs?.length || 0,
+      });
     }
   }
 }

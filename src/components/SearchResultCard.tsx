@@ -9,6 +9,7 @@ interface SearchResultCardProps {
   onSelect: (result: SearchResult) => void;
   isLoading: boolean;    // this specific card is being re-fetched
   anyLoading: boolean;   // any card in the list is being fetched
+  isDownloaded?: boolean; // already in download history
 }
 
 export default function SearchResultCard({
@@ -17,10 +18,11 @@ export default function SearchResultCard({
   onSelect,
   isLoading,
   anyLoading,
+  isDownloaded,
 }: SearchResultCardProps) {
   const [imgError, setImgError] = useState(false);
 
-  const artist   = extractArtistFromSubtitle(result.subtitle);
+  const artist = extractArtistFromSubtitle(result.subtitle);
   const duration = result.more_info?.duration ? formatDuration(result.more_info.duration) : null;
   const imageUrl = searchImage(result.image);
 
@@ -34,26 +36,25 @@ export default function SearchResultCard({
       transition={{ duration: 0.22, delay: index * 0.035, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => !anyLoading && onSelect(result)}
       disabled={anyLoading}
-      className={`group w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-        isLoading
-          ? 'border-cyan-500/40 bg-cyan-500/5 cursor-wait'
-          : anyLoading
+      className={`group w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${isLoading
+        ? 'border-cyan-500/40 bg-cyan-500/5 cursor-wait'
+        : anyLoading
           ? 'border-border bg-glass cursor-not-allowed'
           : 'border-border bg-glass hover:border-cyan-500/40 hover:bg-cyan-500/5 cursor-pointer active:scale-[0.99]'
-      }`}
+        }`}
     >
       {/* Album art thumbnail */}
       <div className="relative flex-shrink-0 w-11 h-11 rounded-lg overflow-hidden bg-border">
         {/* Image */}
         {!imgError && (
           <img
-          src={imageUrl}
-          alt={result.title}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setImgError(true)}
-          className="w-full h-full object-cover"
-        />
+            src={imageUrl}
+            alt={result.title}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover"
+          />
         )}
         {/* Fallback icon */}
         {imgError && (
@@ -76,15 +77,21 @@ export default function SearchResultCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span
-            className={`text-sm font-display font-semibold leading-tight truncate transition-colors duration-150 ${
-              isLoading ? 'text-violet-300' : 'text-text-primary group-hover:text-violet-300'
-            }`}
+            className={`text-sm font-display font-semibold leading-tight truncate transition-colors duration-150 ${isLoading ? 'text-violet-300' : 'text-text-primary group-hover:text-violet-300'
+              }`}
           >
             {result.title}
           </span>
           {result.isExplicit && (
             <span className="flex-shrink-0 px-1 py-0.5 bg-rose/10 border border-rose/25 text-rose text-[9px] font-bold font-mono rounded uppercase leading-none">
               E
+            </span>
+          )}
+          {isDownloaded && (
+            <span className="flex-shrink-0 px-1 py-0.5 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-bold font-mono rounded leading-none flex items-center gap-0.5">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
             </span>
           )}
         </div>

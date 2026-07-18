@@ -9,6 +9,7 @@ interface SearchResultsProps {
   fetchingId: string | null;
   onSelect: (result: SearchResult) => void;
   error: string;
+  downloadedTrackIds?: Set<string>;
 }
 
 export default function SearchResults({
@@ -18,6 +19,7 @@ export default function SearchResults({
   fetchingId,
   onSelect,
   error,
+  downloadedTrackIds,
 }: SearchResultsProps) {
   // While a result is being fetched, show the results grid normally
   // (the individual card shows its own spinner)
@@ -137,6 +139,7 @@ export default function SearchResults({
                 onSelect={onSelect}
                 isLoading={fetchingId === r.id}
                 anyLoading={isFetchingResult}
+                isDownloaded={downloadedTrackIds?.has(r.id)}
               />
             ))}
           </div>

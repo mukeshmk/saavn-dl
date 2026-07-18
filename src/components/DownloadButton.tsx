@@ -4,6 +4,7 @@ import type { SaavnSong, Quality } from '../types/saavn';
 import { downloadWithMetadata, downloadDirect } from '../utils/download';
 import type { TrackMetadata } from '../types/metadata';
 import { useDownloadQueue } from './DownloadQueueContext';
+import { recordDownload } from '../utils/history';
 
 interface DownloadButtonProps {
   song: SaavnSong;
@@ -50,6 +51,20 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
       }
       setPhase('done');
       onDownloadSuccess?.();
+
+      // Record to download history
+      recordDownload({
+        saavnId: song.id,
+        type: 'track',
+        title: song.title,
+        artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || 'Unknown Artist',
+        album: song.more_info?.album || '',
+        image: song.image || '',
+        quality,
+        mode: useFFmpeg ? 'ffmpeg' : 'direct',
+        songCount: 0,
+      }).catch(() => { /* best-effort */ });
+
       setTimeout(() => setPhase('idle'), 3000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Download failed';
@@ -85,14 +100,14 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
           disabled={phase === 'working'}
           whileTap={{ scale: phase === 'working' ? 1 : 0.97 }}
           className={`flex-1 relative flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-display font-semibold text-sm transition-all duration-200 overflow-hidden ${phase === 'done'
-              ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-400'
-              : phase === 'queued'
-                ? 'bg-violet-500/10 border border-violet-500/40 text-violet-400'
-                : phase === 'error'
-                  ? 'bg-rose/10 border border-rose/40 text-rose'
-                  : phase === 'working'
-                    ? 'bg-cyan/5 border border-cyan/20 text-cyan cursor-wait'
-                    : 'bg-cyan text-void hover:bg-cyan-dim shadow-glow cursor-pointer'
+            ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-400'
+            : phase === 'queued'
+              ? 'bg-violet-500/10 border border-violet-500/40 text-violet-400'
+              : phase === 'error'
+                ? 'bg-rose/10 border border-rose/40 text-rose'
+                : phase === 'working'
+                  ? 'bg-cyan/5 border border-cyan/20 text-cyan cursor-wait'
+                  : 'bg-cyan text-void hover:bg-cyan-dim shadow-glow cursor-pointer'
             }`}
         >
           {/* Progress fill */}
@@ -149,8 +164,8 @@ export default function DownloadButton({ song, quality, overrideMeta, overrideFi
             onClick={() => setUseFFmpeg(!useFFmpeg)}
             title={useFFmpeg ? 'Metadata embedding ON (via ffmpeg.wasm)' : 'Direct download (no metadata)'}
             className={`w-8 h-8 rounded-lg border transition-all text-[10px] font-mono ${useFFmpeg
-                ? 'bg-cyan/10 border-cyan/30 text-cyan'
-                : 'bg-glass border-border text-text-muted hover:border-cyan/20'
+              ? 'bg-cyan/10 border-cyan/30 text-cyan'
+              : 'bg-glass border-border text-text-muted hover:border-cyan/20'
               }`}
           >
             {useFFmpeg ? 'M' : 'D'}

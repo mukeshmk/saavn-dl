@@ -16,6 +16,7 @@ import {
   detectMultiArtist,
 } from '../../utils/albumDownload';
 import { useDownloadQueue } from '../DownloadQueueContext';
+import { recordDownload } from '../../utils/history';
 
 type ModalPhase = 'config' | 'downloading' | 'done' | 'error';
 
@@ -92,6 +93,19 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
         await downloadAlbumIndividual(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
       }
       setPhase('done');
+
+      // Record to download history
+      recordDownload({
+        saavnId: album.id,
+        type: 'album',
+        title: album.title,
+        artist: album.artists?.primary?.[0]?.name || album.subtitle?.split(' - ')[0]?.trim() || 'Various Artists',
+        album: album.title,
+        image: album.image || '',
+        quality,
+        mode,
+        songCount: album.songs?.length || 0,
+      }).catch(() => { /* best-effort */ });
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'Download failed');
       setPhase('error');
