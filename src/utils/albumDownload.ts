@@ -54,6 +54,45 @@ export function estimateAlbumSizeMB(songs: SaavnSong[], quality: string): number
   return (totalSec * bps) / (1024 * 1024);
 }
 
+// ─── Multi-artist detection (Navidrome compatibility) ─────────────────────────
+
+export interface MultiArtistInfo {
+  isMultiArtist: boolean;
+  uniqueArtists: string[];
+  suggestedAlbumArtist: string;
+}
+
+/**
+ * Detects whether an album has tracks by different artists.
+ * If so, suggests a unified Album Artist value:
+ * - If there's an album-level primary artist, use that.
+ * - Otherwise, suggest "Various Artists".
+ */
+export function detectMultiArtist(album: AlbumDetail): MultiArtistInfo {
+  const artistSet = new Set<string>();
+
+  for (const song of album.songs) {
+    const artist = getArtistT(song).toLowerCase().trim();
+    artistSet.add(artist);
+  }
+
+  const uniqueArtists = [...new Set(album.songs.map(s => getArtistT(s)))];
+  const isMultiArtist = artistSet.size > 1;
+
+  // Suggest unified Album Artist
+  let suggestedAlbumArtist = 'Various Artists';
+
+  if (album.artists?.primary?.length === 1) {
+    // Single album-level artist → use it
+    suggestedAlbumArtist = album.artists.primary[0].name;
+  } else if (album.artists?.primary?.length > 1) {
+    // Multiple album-level artists → join them
+    suggestedAlbumArtist = album.artists.primary.map(a => a.name).join(', ');
+  }
+
+  return { isMultiArtist, uniqueArtists, suggestedAlbumArtist };
+}
+
 // ─── Trigger ──────────────────────────────────────────────────────────────────
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -110,6 +149,7 @@ async function trackToBlob(
   song: SaavnSong,
   quality: string,
   onProgress: (stage: string, pct: number) => void,
+  albumArtistOverride?: string,
 ): Promise<Blob> {
   const { more_info } = song;
 
@@ -140,6 +180,9 @@ async function trackToBlob(
   const artist = getArtistT(song);
   const meta = { title: song.title, artist, album: more_info.album, year: song.year };
 
+  // Determine album_artist: use override if provided, otherwise fall back to track artist
+  const albumArtist = albumArtistOverride || artist;
+
   // Use song-id-scoped filenames so sequential calls don't collide inside wasm fs
   const inF = `in_${song.id}.mp4`;
   const outF = `out_${song.id}.mp4`;
@@ -160,6 +203,7 @@ async function trackToBlob(
       '-disposition:v:0', 'attached_pic',
       '-metadata', `title=${meta.title}`,
       '-metadata', `artist=${meta.artist}`,
+      '-metadata', `album_artist=${albumArtist}`,
       '-metadata', `album=${meta.album}`,
       '-metadata', `date=${meta.year}`,
       '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
@@ -181,6 +225,7 @@ async function trackToBlob(
         '-i', inF, '-c', 'copy',
         '-metadata', `title=${meta.title}`,
         '-metadata', `artist=${meta.artist}`,
+        '-metadata', `album_artist=${albumArtist}`,
         '-metadata', `album=${meta.album}`,
         '-metadata', `date=${meta.year}`,
         '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
@@ -198,6 +243,7 @@ async function trackToBlob(
       '-i', inF, '-c', 'copy',
       '-metadata', `title=${meta.title}`,
       '-metadata', `artist=${meta.artist}`,
+      '-metadata', `album_artist=${albumArtist}`,
       '-metadata', `album=${meta.album}`,
       '-metadata', `date=${meta.year}`,
       '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
@@ -225,6 +271,7 @@ export async function downloadAlbumIndividual(
   quality: string,
   onProgress: ProgressCallback,
   onFailure: FailureCallback,
+  albumArtistOverride?: string,
 ): Promise<void> {
   const songs = album.songs;
   const tracks: TrackStatus[] = songs.map(s => ({ id: s.id, title: s.title, status: 'pending' as const }));
@@ -245,7 +292,7 @@ export async function downloadAlbumIndividual(
         const blob = await trackToBlob(songs[i], quality, (stage, p) => {
           tracks[i] = { ...tracks[i], status: 'downloading' };
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 100));
-        });
+        }, albumArtistOverride);
         // Trigger individual download
         const artistName = getArtistT(songs[i]);
         const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
@@ -286,6 +333,7 @@ export async function downloadAlbumZip(
   quality: string,
   onProgress: ProgressCallback,
   onFailure: FailureCallback,
+  albumArtistOverride?: string,
 ): Promise<void> {
   const songs = album.songs;
   const tracks: TrackStatus[] = songs.map(s => ({ id: s.id, title: s.title, status: 'pending' as const }));
@@ -315,7 +363,7 @@ export async function downloadAlbumZip(
       try {
         const blob = await trackToBlob(songs[i], quality, (stage, p) => {
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 88));
-        });
+        }, albumArtistOverride);
         const artistName = getArtistT(songs[i]);
         const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
         completed.push({ filename, blob });
@@ -405,6 +453,7 @@ export async function downloadAlbumLibrary(
   quality: string,
   onProgress: ProgressCallback,
   onFailure: FailureCallback,
+  albumArtistOverride?: string,
 ): Promise<void> {
   const songs = album.songs;
   const tracks: TrackStatus[] = songs.map(s => ({ id: s.id, title: s.title, status: 'pending' as const }));
@@ -426,7 +475,7 @@ export async function downloadAlbumLibrary(
         const blob = await trackToBlob(songs[i], quality, (stage, p) => {
           tracks[i] = { ...tracks[i], status: 'downloading' };
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 100));
-        });
+        }, albumArtistOverride);
 
         // Save to server library instead of triggering browser download
         const artistName = getArtistT(songs[i]);

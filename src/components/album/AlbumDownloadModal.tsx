@@ -13,6 +13,7 @@ import {
   downloadAlbumLibrary,
   checkLibraryEnabled,
   estimateAlbumSizeMB,
+  detectMultiArtist,
 } from '../../utils/albumDownload';
 
 type ModalPhase = 'config' | 'downloading' | 'done' | 'error';
@@ -45,12 +46,25 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
     });
   }, []);
 
+  // Multi-artist detection for Navidrome compatibility
+  const multiArtistInfo = detectMultiArtist(album);
+  const [albumArtistOverride, setAlbumArtistOverride] = useState<string | null>(null);
+  const [showMultiArtistPrompt, setShowMultiArtistPrompt] = useState(false);
+  const [albumArtistInput, setAlbumArtistInput] = useState(multiArtistInfo.suggestedAlbumArtist);
+
   const estimatedMB = estimateAlbumSizeMB(album.songs, quality);
   const warnLarge = estimatedMB > 200;
 
   const handleStart = useCallback(async () => {
+    // If multi-artist album and user hasn't addressed the prompt yet, show it
+    if (multiArtistInfo.isMultiArtist && albumArtistOverride === null && !showMultiArtistPrompt) {
+      setShowMultiArtistPrompt(true);
+      return;
+    }
+
     setPhase('downloading');
     setGlobalError('');
+    setShowMultiArtistPrompt(false);
 
     const onProg = (p: AlbumDownloadProgress) => setProgress({ ...p });
 
@@ -59,18 +73,37 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
 
     try {
       if (mode === 'zip') {
-        await downloadAlbumZip(album, quality, onProg, onFail);
+        await downloadAlbumZip(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
       } else if (mode === 'library') {
-        await downloadAlbumLibrary(album, quality, onProg, onFail);
+        await downloadAlbumLibrary(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
       } else {
-        await downloadAlbumIndividual(album, quality, onProg, onFail);
+        await downloadAlbumIndividual(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
       }
       setPhase('done');
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'Download failed');
       setPhase('error');
     }
-  }, [album, quality, mode]);
+  }, [album, quality, mode, multiArtistInfo.isMultiArtist, albumArtistOverride, showMultiArtistPrompt]);
+
+  const handleMultiArtistConfirm = () => {
+    setAlbumArtistOverride(albumArtistInput.trim() || 'Various Artists');
+    setShowMultiArtistPrompt(false);
+  };
+
+  const handleMultiArtistSkip = () => {
+    // User chose to skip — set override to empty string to signal "addressed but declined"
+    setAlbumArtistOverride('');
+    setShowMultiArtistPrompt(false);
+  };
+
+  // Auto-start download after the user resolves the multi-artist prompt
+  useEffect(() => {
+    if (albumArtistOverride !== null && phase === 'config' && !showMultiArtistPrompt) {
+      // Trigger download now that override is set
+      handleStart();
+    }
+  }, [albumArtistOverride]);
 
   const resolveFailure = (action: 'skip' | 'retry') => {
     failure?.resolve(action);
@@ -215,6 +248,59 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
                     Download
                   </motion.button>
                 </div>
+
+                {/* Multi-artist prompt (Navidrome fix) */}
+                <AnimatePresence>
+                  {showMultiArtistPrompt && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="p-3.5 rounded-xl border border-violet-400/30 bg-violet-500/5 space-y-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" className="flex-shrink-0 mt-0.5">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="16" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                        <div>
+                          <p className="text-[12px] font-display font-semibold text-violet-300">Multi-artist album detected</p>
+                          <p className="text-[11px] font-mono text-white/60 mt-1 leading-relaxed">
+                            This album has {multiArtistInfo.uniqueArtists.length} different artists. Music servers like Navidrome will split it into separate albums unless all tracks share the same <span className="text-violet-300">Album Artist</span> tag.
+                          </p>
+                          <p className="text-[10px] font-mono text-white/40 mt-1.5">
+                            Set a unified Album Artist to keep this as one album:
+                          </p>
+                        </div>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={albumArtistInput}
+                        onChange={(e) => setAlbumArtistInput(e.target.value)}
+                        placeholder="e.g. Various Artists"
+                        className="w-full bg-glass border border-border rounded-xl px-3.5 py-2.5 text-sm font-body text-text-primary placeholder:text-text-muted/50 outline-none focus:border-violet-400/50 transition-colors"
+                      />
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleMultiArtistSkip}
+                          className="flex-1 py-2 rounded-xl border border-border text-[11px] font-display font-medium text-white/60 hover:text-text-primary hover:border-white/20 transition-all"
+                        >
+                          Skip (keep as-is)
+                        </button>
+                        <motion.button
+                          whileTap={{ scale: 0.97 }}
+                          onClick={handleMultiArtistConfirm}
+                          className="flex-1 py-2 rounded-xl bg-violet-500/20 border border-violet-400/40 text-[11px] font-display font-semibold text-violet-300 hover:bg-violet-500/30 transition-all"
+                        >
+                          Apply &amp; Download
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
 
