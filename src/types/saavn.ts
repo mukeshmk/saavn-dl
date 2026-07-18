@@ -191,3 +191,51 @@ export function totalAlbumDuration(songs: SaavnSong[]): string {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m ${s}s`;
 }
+
+// ─── Artist types ─────────────────────────────────────────────────────────────
+
+export interface ArtistSearchResult {
+  id: string;
+  name: string;
+  image: string;
+  type: 'artist';
+  perma_url: string;
+}
+
+export interface ArtistAlbum {
+  id: string;
+  token: string;
+  title: string;
+  subtitle: string;
+  type: string;
+  perma_url: string;
+  image: string;
+  language: string;
+  year: string;
+  isExplicit: boolean;
+  song_count: string;
+  artists: {
+    primary: AlbumArtist[];
+    featured: AlbumArtist[];
+  };
+}
+
+export interface ArtistDetail {
+  id: string;
+  name: string;
+  subtitle: string;
+  image: string;
+  topAlbums: ArtistAlbum[];
+  singles: ArtistAlbum[];
+  latest_release: ArtistAlbum[];
+}
+
+export function isSaavnArtistUrl(value: string): boolean {
+  return /jiosaavn\.com\/artist\//i.test(value.trim());
+}
+
+/** Extract artist token from a JioSaavn artist URL */
+export function extractArtistToken(url: string): string {
+  const parts = url.trim().replace(/\/$/, '').split('/');
+  return parts[parts.length - 1] || '';
+}

@@ -8,9 +8,12 @@ import AlbumPage from './components/album/AlbumPage';
 import AlbumSkeleton from './components/album/AlbumSkeleton';
 import AlbumResultCard from './components/album/AlbumResultCard';
 import LibraryPage from './components/library/LibraryPage';
-import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail } from './types/saavn';
+import ArtistPage from './components/artist/ArtistPage';
+import ArtistResultCard from './components/artist/ArtistResultCard';
+import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail, ArtistSearchResult, ArtistDetail } from './types/saavn';
 import { searchSongs } from './utils/search';
 import { searchAlbums, fetchAlbumDetail } from './utils/album';
+import { searchArtists, fetchArtistDetail } from './utils/artist';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -20,7 +23,7 @@ const SONG_API = 'https://sda.rhythmax.workers.dev';
 
 // ─── Search tab ───────────────────────────────────────────────────────────────
 
-type SearchTab = 'songs' | 'albums';
+type SearchTab = 'songs' | 'albums' | 'artists';
 
 // ─── View state machine ───────────────────────────────────────────────────────
 
@@ -38,6 +41,11 @@ type View =
   | { type: 'searching-albums'; query: string }
   | { type: 'album-results'; results: AlbumSearchResult[]; query: string }
   | { type: 'fetching-album-result'; results: AlbumSearchResult[]; query: string; fetchingId: string }
+  // ── Artist flows ──
+  | { type: 'searching-artists'; query: string }
+  | { type: 'artist-results'; results: ArtistSearchResult[]; query: string }
+  | { type: 'fetching-artist-detail'; results: ArtistSearchResult[]; query: string; fetchingId: string }
+  | { type: 'artist'; artist: ArtistDetail; fromSearch: boolean }
   // ── Errors ──
   | { type: 'error'; message: string; context: 'url' | 'search' }
   // ── Library ──
@@ -70,6 +78,7 @@ export default function App() {
   const [musicPathEnabled, setMusicPathEnabled] = useState(false);
   const lastSongSearch = useRef<{ results: SearchResult[]; query: string } | null>(null);
   const lastAlbumSearch = useRef<{ results: AlbumSearchResult[]; query: string } | null>(null);
+  const lastArtistSearch = useRef<{ results: ArtistSearchResult[]; query: string } | null>(null);
 
   useEffect(() => {
     fetch('/updates.json').then(r => r.json()).then(setUpdates).catch(() => { });
@@ -123,7 +132,7 @@ export default function App() {
         setSearchError(msg);
         setView({ type: 'error', message: msg, context: 'search' });
       }
-    } else {
+    } else if (searchTab === 'albums') {
       setView({ type: 'searching-albums', query });
       try {
         const results = await searchAlbums(query);
@@ -131,6 +140,17 @@ export default function App() {
         setView({ type: 'album-results', results, query });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Album search failed';
+        setSearchError(msg);
+        setView({ type: 'error', message: msg, context: 'search' });
+      }
+    } else {
+      setView({ type: 'searching-artists', query });
+      try {
+        const results = await searchArtists(query);
+        lastArtistSearch.current = { results, query };
+        setView({ type: 'artist-results', results, query });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Artist search failed';
         setSearchError(msg);
         setView({ type: 'error', message: msg, context: 'search' });
       }
@@ -171,6 +191,36 @@ export default function App() {
     }
   }, [view]);
 
+  // ── Artist result select → fetch artist detail ────────────────────────────
+
+  const handleArtistResultSelect = useCallback(async (result: ArtistSearchResult) => {
+    const currentResults = view.type === 'artist-results' || view.type === 'fetching-artist-detail' ? view.results : [];
+    const currentQuery = view.type === 'artist-results' || view.type === 'fetching-artist-detail' ? view.query : '';
+    setView({ type: 'fetching-artist-detail', results: currentResults, query: currentQuery, fetchingId: result.id });
+    setSearchError('');
+    try {
+      const artist = await fetchArtistDetail(result.id);
+      setView({ type: 'artist', artist, fromSearch: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load artist';
+      setSearchError(msg);
+      setView({ type: 'artist-results', results: currentResults, query: currentQuery });
+    }
+  }, [view]);
+
+  // ── Artist page → album select → fetch album detail ───────────────────────
+
+  const handleArtistAlbumSelect = useCallback(async (albumUrl: string) => {
+    setView({ type: 'fetching-album' });
+    setSearchError('');
+    try {
+      const album = await fetchAlbumDetail(albumUrl);
+      setView({ type: 'album', album, fromSearch: true });
+    } catch (err) {
+      setView({ type: 'error', message: err instanceof Error ? err.message : 'Album fetch failed', context: 'url' });
+    }
+  }, []);
+
   // ── Back to results ───────────────────────────────────────────────────────
 
   const goBack = () => {
@@ -179,6 +229,11 @@ export default function App() {
       setView({ type: 'song-results', ...lastSongSearch.current });
     } else if (view.type === 'album' && view.fromSearch && lastAlbumSearch.current) {
       setView({ type: 'album-results', ...lastAlbumSearch.current });
+    } else if (view.type === 'album' && view.fromSearch && lastArtistSearch.current) {
+      // If we came from artist page → album, try going back to artist results
+      setView({ type: 'artist-results', ...lastArtistSearch.current });
+    } else if (view.type === 'artist' && view.fromSearch && lastArtistSearch.current) {
+      setView({ type: 'artist-results', ...lastArtistSearch.current });
     } else {
       setView({ type: 'idle' });
     }
@@ -206,12 +261,13 @@ export default function App() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const isFetchingUrl = view.type === 'fetching-song' || view.type === 'fetching-album';
-  const isSearching = view.type === 'searching-songs' || view.type === 'searching-albums';
-  const isFetchingResult = view.type === 'fetching-song-result' || view.type === 'fetching-album-result';
+  const isSearching = view.type === 'searching-songs' || view.type === 'searching-albums' || view.type === 'searching-artists';
+  const isFetchingResult = view.type === 'fetching-song-result' || view.type === 'fetching-album-result' || view.type === 'fetching-artist-detail';
   const isAnyLoading = isFetchingUrl || isSearching || isFetchingResult;
   const showSongResults = ['searching-songs', 'song-results', 'fetching-song-result'].includes(view.type) || (view.type === 'error' && view.context === 'search' && searchTab === 'songs');
   const showAlbumResults = ['searching-albums', 'album-results', 'fetching-album-result'].includes(view.type) || (view.type === 'error' && view.context === 'search' && searchTab === 'albums');
-  const showSearch = showSongResults || showAlbumResults;
+  const showArtistResults = ['searching-artists', 'artist-results', 'fetching-artist-detail'].includes(view.type) || (view.type === 'error' && view.context === 'search' && searchTab === 'artists');
+  const showSearch = showSongResults || showAlbumResults || showArtistResults;
 
   return (
     <div className="min-h-screen bg-void relative overflow-x-hidden">
@@ -262,7 +318,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="w-full max-w-2xl mt-4 flex gap-1"
             >
-              {(['songs', 'albums'] as SearchTab[]).map((tab) => (
+              {(['songs', 'albums', 'artists'] as SearchTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setSearchTab(tab)}
@@ -316,6 +372,13 @@ export default function App() {
               </motion.div>
             )}
 
+            {/* Artist page */}
+            {view.type === 'artist' && (
+              <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
+              </motion.div>
+            )}
+
             {/* Library page */}
             {view.type === 'library' && (
               <LibraryPage onBack={() => setView({ type: 'idle' })} />
@@ -348,6 +411,17 @@ export default function App() {
                 <AlbumResultsPanel
                   view={view}
                   onSelect={handleAlbumResultSelect}
+                />
+              </motion.div>
+            )}
+
+            {/* Artist search results */}
+            {showArtistResults && (
+              <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <SearchErrorBanner error={searchError} />
+                <ArtistResultsPanel
+                  view={view}
+                  onSelect={handleArtistResultSelect}
                 />
               </motion.div>
             )}
@@ -545,8 +619,6 @@ export default function App() {
 
 // ─── Album results panel ──────────────────────────────────────────────────────
 
-type AlbumView = Extract<View, { type: 'searching-albums' | 'album-results' | 'fetching-album-result' | 'error' }>;
-
 function AlbumResultsPanel({
   view,
   onSelect,
@@ -637,6 +709,105 @@ function AlbumResultsPanel({
             index={i}
             onSelect={onSelect}
             isLoading={fetchingId === album.id}
+            anyLoading={isFetching}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Artist results panel ─────────────────────────────────────────────────────
+
+function ArtistResultsPanel({
+  view,
+  onSelect,
+}: {
+  view: View;
+  onSelect: (r: ArtistSearchResult) => void;
+}) {
+  const isSearching = view.type === 'searching-artists';
+  const results = view.type === 'artist-results' || view.type === 'fetching-artist-detail' ? view.results : [];
+  const query = view.type === 'searching-artists' ? view.query : view.type === 'artist-results' || view.type === 'fetching-artist-detail' ? view.query : '';
+  const fetchingId = view.type === 'fetching-artist-detail' ? view.fetchingId : null;
+  const isFetching = fetchingId !== null;
+  const error = view.type === 'error' && view.context === 'search' ? view.message : '';
+
+  const shimmer = { background: 'linear-gradient(90deg,#1e1e28 0%,#2a2a38 50%,#1e1e28 100%)', backgroundSize: '200% 100%', animation: 'shimmer 1.8s ease-in-out infinite' };
+
+  if (isSearching) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-3 h-3 border border-cyan-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <span className="text-[11px] font-mono text-violet-400 truncate">Searching artists for "{query}"…</span>
+        </div>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.055 }}
+            className="flex items-center gap-3 p-3 rounded-xl border border-border bg-glass">
+            <div className="w-12 h-12 rounded-full flex-shrink-0" style={shimmer} />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 rounded w-2/5" style={shimmer} />
+              <div className="h-3 rounded w-1/5" style={shimmer} />
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error && results.length === 0) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+        className="flex items-start gap-3 p-4 rounded-xl border border-rose/20 bg-rose/5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b8a" strokeWidth="2" className="flex-shrink-0 mt-0.5">
+          <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <div>
+          <p className="text-sm font-display font-semibold text-rose">Artist search failed</p>
+          <p className="text-xs font-mono text-rose/70 mt-0.5">{error}</p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (!results.length && query) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12">
+        <p className="text-3xl mb-3">🎤</p>
+        <p className="text-sm font-display font-semibold text-text-secondary">No artists found for "{query}"</p>
+        <p className="text-xs font-mono text-text-muted mt-1.5">Try different keywords</p>
+      </motion.div>
+    );
+  }
+
+  if (!results.length) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider flex-shrink-0">Artists for</span>
+          <span className="text-[11px] font-mono text-cyan truncate">"{query}"</span>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isFetching && (
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[11px] font-mono text-violet-400/70 flex items-center gap-1">
+              <span className="w-2.5 h-2.5 border border-violet-400 border-t-transparent rounded-full animate-spin inline-block" />
+              Loading…
+            </motion.span>
+          )}
+          <span className="text-[11px] font-mono text-text-muted">{results.length} artists</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {results.map((artist, i) => (
+          <ArtistResultCard
+            key={artist.id}
+            artist={artist}
+            index={i}
+            onSelect={onSelect}
+            isLoading={fetchingId === artist.id}
             anyLoading={isFetching}
           />
         ))}
