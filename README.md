@@ -1,6 +1,7 @@
 # saavn-dl
 
-A modern JioSaavn songs & albums downloader and with ffmpeg powered metadata embedding.
+A modern JioSaavn songs & albums downloader and with ffmpeg powered metadata embedding.  
+Search by song, album, or artist name — browse discographies and download entire albums.
 
 Built with React, Vite and TypeScript.  
 Designed with a premium glassmorphism-inspired UI.
@@ -32,7 +33,8 @@ Designed with a premium glassmorphism-inspired UI.
 
 ## Features
 
-- 🔗 Paste any JioSaavn song/album URL or just search by track/album name
+- 🔗 Paste any JioSaavn song/album URL or just search by track/album/artist name
+- 🎤 Artist search — browse an artist's albums, singles, and latest releases
 - 🎵 Built-in audio preview player
 - 🎚️ Quality selector up to 320 kbps
 - 🗃️ Built-in metadata editor (per-track, works on both song and album views)

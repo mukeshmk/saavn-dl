@@ -1,5 +1,11 @@
 [
   {
+    "id": 8,
+    "title": "Artist Search + Album Browsing",
+    "date": "18-07-2026",
+    "content": "You can now search for artists by name! A new \"Artists\" tab in the search bar lets you find any artist, view their full discography (albums, singles, and latest releases), and click through to download any album. The artist page shows a profile card with listener count and tabbed navigation between albums, singles, and latest releases."
+  },
+  {
     "id": 7,
     "title": "Navidrome Compatibility + Album Metadata Editor",
     "date": "18-07-2026",
