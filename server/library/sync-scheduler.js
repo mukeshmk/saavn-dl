@@ -99,9 +99,9 @@ export function setSyncRunning(value) {
  * Initializes the scheduler from persisted config.
  * Call this on server startup.
  */
-export async function initScheduler() {
+export function initScheduler() {
   try {
-    const config = await readConfig();
+    const config = readConfig();
     if (config.schedule) {
       const started = startScheduler(config.schedule);
       if (started) {
