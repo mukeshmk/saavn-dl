@@ -2,14 +2,15 @@
  * API History Routes — HTTP handler for /api/history/* endpoints.
  *
  * Endpoints:
- *   GET    /api/history          → list all entries (optional ?type=track|album)
- *   GET    /api/history/ids      → get downloaded IDs for quick lookups
- *   POST   /api/history          → add a new entry
- *   DELETE /api/history/:id      → remove a specific entry
- *   DELETE /api/history          → clear all history
+ *   GET    /api/history              → list all entries (optional ?type=track|album)
+ *   GET    /api/history/ids          → get downloaded IDs for quick lookups
+ *   GET    /api/history/albums/:id/tracks → get tracks for a specific album
+ *   POST   /api/history              → add a new entry (supports tracks array for albums)
+ *   DELETE /api/history/:id          → remove a specific entry
+ *   DELETE /api/history              → clear all history
  */
 
-import { getEntries, getDownloadedIds, addEntry, removeEntry, clearHistory } from './store.js';
+import { getEntries, getDownloadedIds, addEntry, removeEntry, clearHistory, getAlbumTracks } from './store.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ export async function handleHistoryRoute(req, res, url, jsonResponse) {
   if (pathname === '/api/history' && req.method === 'GET') {
     try {
       const type = url.searchParams.get('type') || undefined;
-      const entries = await getEntries(type);
+      const entries = getEntries(type);
       return jsonResponse(res, 200, { entries });
     } catch (err) {
       return jsonResponse(res, 500, { error: err.message });
@@ -52,8 +53,20 @@ export async function handleHistoryRoute(req, res, url, jsonResponse) {
   // GET /api/history/ids — quick lookup of downloaded IDs
   if (pathname === '/api/history/ids' && req.method === 'GET') {
     try {
-      const ids = await getDownloadedIds();
+      const ids = getDownloadedIds();
       return jsonResponse(res, 200, ids);
+    } catch (err) {
+      return jsonResponse(res, 500, { error: err.message });
+    }
+  }
+
+  // GET /api/history/albums/:id/tracks — get tracks for a specific album
+  const albumTracksMatch = pathname.match(/^\/api\/history\/albums\/([^/]+)\/tracks$/);
+  if (albumTracksMatch && req.method === 'GET') {
+    try {
+      const albumId = decodeURIComponent(albumTracksMatch[1]);
+      const tracks = getAlbumTracks(albumId);
+      return jsonResponse(res, 200, { tracks });
     } catch (err) {
       return jsonResponse(res, 500, { error: err.message });
     }
@@ -72,7 +85,7 @@ export async function handleHistoryRoute(req, res, url, jsonResponse) {
         return jsonResponse(res, 400, { error: 'type must be "track" or "album"' });
       }
 
-      const entry = await addEntry(body);
+      const entry = addEntry(body);
       return jsonResponse(res, 201, { entry });
     } catch (err) {
       return jsonResponse(res, 500, { error: err.message });
@@ -87,11 +100,11 @@ export async function handleHistoryRoute(req, res, url, jsonResponse) {
       const body = await parseBody(req).catch(() => ({}));
 
       if (body.id) {
-        await removeEntry(body.id);
+        removeEntry(body.id);
         return jsonResponse(res, 200, { success: true });
       }
 
-      await clearHistory();
+      clearHistory();
       return jsonResponse(res, 200, { success: true });
     } catch (err) {
       return jsonResponse(res, 500, { error: err.message });
@@ -99,13 +112,13 @@ export async function handleHistoryRoute(req, res, url, jsonResponse) {
   }
 
   // DELETE /api/history/:id — remove specific entry
-  if (pathname.startsWith('/api/history/') && pathname !== '/api/history/ids' && req.method === 'DELETE') {
+  if (pathname.startsWith('/api/history/') && pathname !== '/api/history/ids' && !pathname.includes('/albums/') && req.method === 'DELETE') {
     try {
       const id = pathname.replace('/api/history/', '');
       if (!id) {
         return jsonResponse(res, 400, { error: 'Missing entry id' });
       }
-      await removeEntry(decodeURIComponent(id));
+      removeEntry(decodeURIComponent(id));
       return jsonResponse(res, 200, { success: true });
     } catch (err) {
       return jsonResponse(res, 500, { error: err.message });
