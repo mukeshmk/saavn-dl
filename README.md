@@ -156,7 +156,6 @@ A clock icon in the footer opens the History page. All completed downloads are t
 
 - **SQLite persistence** — stored at `SAAVN_DB_PATH` (falls back to localStorage on static deployments)
 - **Per-track album data** — individual track metadata stored for album downloads
-- **Automatic migration** — existing `.saavn-dl-history.json` files imported on first startup
 - **"Already downloaded" badges** — green checkmark on search results
 - **Filter & manage** — filter by tracks/albums, remove individual entries, clear all
 - **Deduplication** — re-downloading updates the timestamp instead of creating duplicates

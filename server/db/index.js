@@ -41,21 +41,17 @@ export function getDb() {
 }
 
 export function initDb() {
-  // Ensure the directory exists
   const dir = dirname(DB_PATH);
   if (!existsSync(dir)) {
-    console.log(`[db] Creating directory: ${dir}`);
     mkdirSync(dir, { recursive: true });
   }
 
-  console.log(`[db] Opening database at: ${DB_PATH} (dir exists: ${existsSync(dir)})`);
   db = new Database(DB_PATH);
 
   // Enable WAL mode for better concurrent read performance
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  // Run schema creation
   createSchema(db);
 
   console.log(`[db] SQLite initialized at: ${DB_PATH}`);

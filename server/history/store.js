@@ -1,9 +1,8 @@
 /**
  * History Store — persists download history to SQLite.
  *
- * Replaces the previous JSON file-based persistence.
  * Each entry records a completed track or album download with metadata.
- * Album entries can include per-track data for playlist generation.
+ * Album entries include per-track data for playlist generation and stats.
  *
  * Deduplicates by saavnId + type — re-downloading updates the timestamp.
  */

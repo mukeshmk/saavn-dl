@@ -15,7 +15,6 @@ import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
 import { join, extname, resolve, normalize } from 'node:path';
 import { existsSync } from 'node:fs';
 import { initDb } from './db/index.js';
-import { runMigrations } from './db/migrations.js';
 import { handleLibraryRoute } from './library/routes.js';
 import { handleHistoryRoute } from './history/routes.js';
 import { handleProxyRoute } from './proxy.js';
@@ -242,7 +241,6 @@ const server = createServer(async (req, res) => {
 // Initialize database before accepting requests
 try {
   initDb();
-  await runMigrations();
 } catch (err) {
   console.error('[saavn-dl] FATAL: Database initialization failed:', err.message);
   process.exit(1);
