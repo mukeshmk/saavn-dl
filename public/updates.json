@@ -1,5 +1,11 @@
 [
   {
+    "id": 12,
+    "title": "SQLite Database Backend",
+    "date": "19-07-2026",
+    "content": "All server-side persistence (download history, library sync config, sync run history, and failed file tracking) has been migrated from JSON files to a SQLite database powered by better-sqlite3. This brings faster queries, proper relational data (per-track metadata stored for album downloads), and atomic transactions. Existing JSON data is automatically imported on first startup. The Docker image now uses Debian Bookworm for native addon support. Configure the database location with SAAVN_DB_PATH (defaults to /data/saavn-dl.db in Docker)."
+  },
+  {
     "id": 11,
     "title": "Download History",
     "date": "18-07-2026",

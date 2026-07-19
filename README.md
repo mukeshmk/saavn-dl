@@ -1,53 +1,50 @@
 # saavn-dl
 
-A modern JioSaavn songs & albums downloader with ffmpeg powered metadata embedding.  
-Search by song, album, or artist name — browse discographies and download entire albums.
+A browser-based JioSaavn downloader with ffmpeg-powered metadata embedding.  
+Search by song, album, or artist — browse discographies and download entire albums with full metadata and cover art.
 
-Built with React, Vite and TypeScript.  
-Designed with a premium glassmorphism-inspired UI.
+Built with React 18, Vite, TypeScript, and TailwindCSS.
 
 ---
 
 ## Features
 
-- 🔗 Paste any JioSaavn song/album URL or just search by track/album/artist name
-- 🎤 Artist search — browse an artist's albums, singles, and latest releases
-- 🎵 Built-in audio preview player
-- 🎚️ Quality selector up to 320 kbps
-- 🗃️ Built-in metadata editor (per-track, works on both song and album views)
-- 🎛️ Navidrome compatibility — auto-detects multi-artist albums and offers to unify Album Artist tag
-- ⬇️ Download tracks & albums with embedded metadata
-- 🔄 Background download queue — queue multiple songs/albums and keep browsing while they download (with pause, cancel, reorder, and detailed progress)
-- ⚡ Direct download fallback if ffmpeg fails
-- 📂 Library Sync — stage downloads on a fast SSD and sync to NAS on a schedule
-- 🕓 Download History — track what you've downloaded with "already downloaded" badges on search results
-- 🔒 VPN proxy — all CDN fetches buffered and routed server-side with retry logic, compatible with Gluetun/WireGuard
+- **Search & browse** — paste a JioSaavn URL or search by song, album, or artist name
+- **Artist discographies** — browse an artist's albums, singles, and latest releases
+- **Audio preview** — listen before you download
+- **Quality selector** — up to 320 kbps M4A
+- **Metadata editor** — edit title, artist, album, year per-track before downloading
+- **Navidrome compatibility** — auto-detects multi-artist albums and offers a unified Album Artist tag
+- **Background download queue** — queue multiple songs/albums with pause, cancel, reorder, and retry
+- **Save to Library** — save tracks directly to a server-side directory
+- **Library Sync** — stage downloads on a fast SSD and sync to NAS on a cron schedule
+- **Download History** — SQLite-backed history with "already downloaded" badges on search results
+- **VPN proxy** — all CDN fetches routed server-side, compatible with Gluetun/WireGuard
 
 ---
 
 ## Stack
 
-- React 18
-- Vite
-- TypeScript
-- TailwindCSS
-- Framer Motion
-- CryptoJS
-- ffmpeg.wasm
-- node-cron (server-side scheduling)
+| Layer | Technology |
+|-------|-----------|
+| UI | React 18, TailwindCSS, Framer Motion |
+| Build | Vite 5, TypeScript 5 |
+| Audio | ffmpeg.wasm (in-browser), CryptoJS (DES decryption) |
+| Server | Node 20 (raw `node:http`), better-sqlite3, node-cron |
+| Packaging | Docker (multi-stage Bookworm build) |
 
 ---
 
-## Setup
+## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
+```
 
-# Build for production
+Build for production:
+
+```bash
 npm run build
 ```
 
@@ -55,97 +52,59 @@ npm run build
 
 ## Docker
 
-Build and run using Docker:
-
 ```bash
-# Build the image
 docker build -t saavn-dl .
-
-# Run the container
 docker run -p 8080:80 saavn-dl
 ```
 
 The app will be available at `http://localhost:8080`.
 
-The image uses a multi-stage build (Node 20 build + Node 20 Alpine production server) and automatically sets the `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers required for ffmpeg.wasm.
+The image uses a multi-stage build (Node 20 Bookworm → Bookworm-slim) with pre-compiled native modules for better-sqlite3. It sets the COOP/COEP headers required by ffmpeg.wasm and creates a `/data` directory for the SQLite database.
 
-### Running through a VPN (Gluetun)
+### With Library Sync + persistent database
 
-When self-hosted, all audio and cover art fetches are routed through the server-side proxy (`/api/proxy`). This means if you run the container behind a VPN like [Gluetun](https://github.com/qdm12/gluetun), all download traffic to JioSaavn's CDN will go through the VPN tunnel.
-
-Example Docker Compose with Gluetun (Surfshark/WireGuard):
-
-```yaml
-services:
-  gluetun:
-    image: qmcgaw/gluetun:latest
-    container_name: saavn-dl-gluetun
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    volumes:
-      - ${BASE_PATH}/audio/gluetun:/gluetun
-    environment:
-      - VPN_SERVICE_PROVIDER=surfshark
-      - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=${SURFSHARK_PRIVATE_KEY}
-      - WIREGUARD_ADDRESSES=${SURFSHARK_ADDRESS}
-      - SERVER_COUNTRIES=${SURFSHARK_SERVER_COUNTRIES}
-    ports:
-      - 4173:80
-
-  saavn-dl:
-    image: saavn-dl:local
-    container_name: saavn-dl
-    restart: unless-stopped
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    environment:
-      NODE_ENV: production
-      SAAVN_LIBRARY_PATH: /app/downloads
-      SAAVN_MUSIC_PATH: /music
-    volumes:
-      - ${MUSIC_PATH}:/music
-      - ${DOWNLOADS_PATH}:/app/downloads
-    network_mode: service:gluetun
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+```bash
+docker run -p 8080:80 \
+  -e SAAVN_LIBRARY_PATH=/ssd \
+  -e SAAVN_MUSIC_PATH=/nas \
+  -e SAAVN_DB_PATH=/data/saavn-dl.db \
+  -v /mnt/fast-ssd:/ssd \
+  -v /mnt/nas-share:/nas \
+  -v /path/to/db:/data \
+  saavn-dl
 ```
 
-With `network_mode: service:gluetun`, the saavn-dl container shares Gluetun's network stack — all outbound traffic (audio streams, cover art) goes through the VPN. The browser only talks to your server; it never connects directly to JioSaavn's CDN.
+### Running behind a VPN (Gluetun)
 
-> **Note:** Search and metadata API calls (`rtmx.vercel.app`, `sda.rhythmax.workers.dev`) are still made directly by the browser since they don't expose you to JioSaavn's infrastructure. Only the actual media downloads are proxied.
+When self-hosted, all audio and cover art fetches are routed through `/api/proxy`. Running behind [Gluetun](https://github.com/qdm12/gluetun) means all download traffic goes through the VPN tunnel while the browser only talks to your server.
+
+A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (Surfshark/WireGuard) + saavn-dl configured with VPN routing, Library Sync, and persistent SQLite storage. See [`docker-compose.yml`](./docker-compose.yml) for the full setup.
+
+> **Note:** Search and metadata API calls (`rtmx.vercel.app`, `sda.rhythmax.workers.dev`) are made directly by the browser — only actual media downloads are proxied through the VPN.
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SAAVN_LIBRARY_PATH` | _(empty)_ | Fast SSD staging directory. Empty = Save to Library disabled. |
+| `SAAVN_MUSIC_PATH` | _(empty)_ | Permanent NAS directory. Empty = Library Sync disabled. |
+| `SAAVN_DB_PATH` | `./data/saavn-dl.db` | Path to SQLite database file (Docker default: `/data/saavn-dl.db`). |
+| `PORT` | `80` | Server listen port. |
+| `STATIC_DIR` | `./dist` | Path to built frontend assets. |
 
 ---
 
 ## Save to Library
 
-When running via Docker (or the Node server directly), you can enable a **Save to Library** option that saves downloaded album tracks directly to a folder on the server — useful for self-hosted setups where you want music saved to a NAS, media server directory, etc.
+Set `SAAVN_LIBRARY_PATH` to enable a "Save to Library" button in the album download modal. Tracks are saved as:
 
-### How it works
-
-Set the `SAAVN_LIBRARY_PATH` environment variable to the directory where you want tracks saved. When the variable is set, a third "Save to Library" button appears in the album download modal. When it's not set, the button is grayed out and disabled.
-
-### Docker usage
-
-```bash
-# With library saving enabled — mount a host directory
-docker run -p 8080:80 \
-  -e SAAVN_LIBRARY_PATH=/music \
-  -v /path/to/your/music:/music \
-  saavn-dl
+```
+/library/<Album Name> (Year)/01 - Song Title - Artist.m4a
 ```
 
-Tracks are saved as: `/music/<Album Name> (Year)/01 - Song Title - Artist.m4a`
-
-### Without Docker (Node server directly)
+### Without Docker
 
 ```bash
 npm run build
@@ -153,8 +112,6 @@ SAAVN_LIBRARY_PATH=/path/to/music PORT=8080 STATIC_DIR=./dist node server/index.
 ```
 
 ### Development (with Vite proxy)
-
-If you want hot reload during development while still testing the library feature:
 
 ```bash
 # Terminal 1 — API server
@@ -164,124 +121,45 @@ SAAVN_LIBRARY_PATH=/tmp/my-music PORT=3001 STATIC_DIR=./dist node server/index.j
 npm run dev
 ```
 
-### Environment variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SAAVN_LIBRARY_PATH` | No | _(empty)_ | Directory to save tracks (fast SSD staging). Empty = feature disabled. |
-| `SAAVN_MUSIC_PATH` | No | _(empty)_ | Permanent storage directory (NAS). Empty = Library Sync disabled. |
-| `PORT` | No | `80` | Port the server listens on. |
-| `STATIC_DIR` | No | `./dist` | Path to the built frontend files. |
-
 ---
 
 ## Library Sync (SSD → NAS)
 
-When both `SAAVN_LIBRARY_PATH` and `SAAVN_MUSIC_PATH` are set, a **Library** tab appears in the footer. This provides:
+When both `SAAVN_LIBRARY_PATH` and `SAAVN_MUSIC_PATH` are set, a **Library** tab appears in the footer:
 
-- **File browser** — view all staged albums/tracks in the library folder, expand folders to see individual files
-- **Sync Now** — manually trigger a move of all pending files to the NAS, preserving folder structure
-- **Scheduled sync** — configure automatic sync on a cron schedule (presets: every hour, 6h, 12h, daily at 3 AM, or custom)
-- **Retry logic** — failed file moves are retried up to a configurable limit; after exceeding the limit, files are marked "needs attention"
-- **Sync history** — view results of the last 20 sync runs
+- **File browser** — view staged albums/tracks, expand folders
+- **Sync Now** — manually move all pending files to NAS, preserving folder structure
+- **Scheduled sync** — automatic sync on a cron schedule (hourly, 6h, 12h, daily at 3 AM, or custom)
+- **Retry logic** — failed moves retry up to a configurable limit; exceeded files are flagged "needs attention"
+- **Sync history** — last 20 sync runs stored in SQLite
 
-### How it works
-
-Files are **moved** (not copied) from `SAAVN_LIBRARY_PATH` to `SAAVN_MUSIC_PATH`, mirroring the folder structure. For cross-device mounts (SSD → NAS), it falls back to copy + delete. Empty source directories are cleaned up after sync.
-
-### Docker usage with Library Sync
-
-```bash
-docker run -p 8080:80 \
-  -e SAAVN_LIBRARY_PATH=/ssd \
-  -e SAAVN_MUSIC_PATH=/nas \
-  -v /mnt/fast-ssd:/ssd \
-  -v /mnt/nas-share:/nas \
-  saavn-dl
-```
-
-### Without Docker
-
-```bash
-npm run build
-SAAVN_LIBRARY_PATH=/mnt/ssd SAAVN_MUSIC_PATH=/mnt/nas PORT=8080 STATIC_DIR=./dist node server/index.js
-```
-
-### API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/proxy?url=<encoded-url>` | Proxy external fetches through the server (VPN) |
-| `GET` | `/api/library/browse?path=` | List directory contents |
-| `POST` | `/api/library/sync` | Trigger immediate sync |
-| `GET` | `/api/library/sync/status` | Sync status + scheduler state |
-| `GET` | `/api/library/sync/config` | Current config (schedule, retry limit) |
-| `POST` | `/api/library/sync/config` | Update config |
-| `POST` | `/api/library/sync/reset-retries` | Reset retry count for failed files |
-| `GET` | `/api/history` | List download history entries |
-| `GET` | `/api/history/ids` | Downloaded IDs for badge lookups |
-| `POST` | `/api/history` | Record a new download |
-| `DELETE` | `/api/history` | Clear all history |
-| `DELETE` | `/api/history/:id` | Remove a specific history entry |
+Files are **moved** (not copied) from the staging SSD to the NAS. Cross-device mounts fall back to copy + delete. Empty source directories are cleaned up after sync.
 
 ---
 
 ## Background Download Queue
 
-Downloads now process in the background without blocking the UI. You can queue multiple songs and albums, then keep searching and browsing while they download.
+Queue multiple songs and albums, then keep browsing while they download sequentially in the background.
 
-- **Queue songs** — click the `+` button next to the download button on any track
-- **Queue albums** — click "Queue It" in the album download modal
-- **Navidrome fix applied automatically** — multi-artist albums queued in the background get a unified Album Artist tag without manual intervention
-- **Download indicator** — a floating button appears in the top-right showing the active download, progress, and queue count
-- **Download manager** — click the indicator to open a slide-in panel with full queue management:
-  - Cancel the active download
-  - Pause / resume the entire queue
-  - Reorder queued items (move up/down)
-  - Retry failed or cancelled downloads
-  - Expand any item for details (quality, mode, track list, errors, album artist info)
-  - Clear completed or clear the entire queue
-
-All queued downloads continue to route through `/api/proxy` (VPN) when self-hosted.
+- Click `+` next to any track's download button to queue it
+- Click "Queue It" in the album download modal
+- A floating indicator (top-right) shows active progress and queue count
+- Full management panel: cancel, pause/resume, reorder, retry, expand for details
+- Navidrome multi-artist fix applied automatically to queued albums
+- All downloads route through `/api/proxy` (VPN) when self-hosted
 
 ---
 
 ## Download History
 
-saavn-dl keeps track of every song and album you download. A clock icon in the footer opens the History page.
+A clock icon in the footer opens the History page. All completed downloads are tracked with metadata and timestamps.
 
-### Features
-
-- **Persistent storage** — history is saved server-side at `SAAVN_LIBRARY_PATH/.saavn-dl-history.json` (falls back to browser localStorage on static deployments like Vercel)
-- **"Already downloaded" badges** — search results show a green checkmark on tracks and albums you've previously downloaded
-- **Filter by type** — view all downloads, or filter to just tracks or just albums
-- **Manage entries** — remove individual items or clear the entire history
-- **Deduplication** — re-downloading the same track/album updates the timestamp rather than creating duplicates
-- **Always available** — the History tab works on both self-hosted and static deployments (server persistence when available, localStorage fallback otherwise)
-
-### What's recorded per entry
-
-| Field | Description |
-|-------|-------------|
-| Title | Song or album name |
-| Artist | Primary artist |
-| Quality | Bitrate downloaded (e.g., 320) |
-| Mode | Download mode (individual, zip, library, direct, ffmpeg) |
-| Song count | Number of tracks (albums only) |
-| Timestamp | When the download completed |
-| Cover art | Album art thumbnail |
-
-### API Endpoints (self-hosted)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/history` | List all entries (optional `?type=track\|album`) |
-| `GET` | `/api/history/ids` | Get downloaded IDs for badge lookups |
-| `POST` | `/api/history` | Add a new entry |
-| `DELETE` | `/api/history` | Clear all history |
-| `DELETE` | `/api/history/:id` | Remove a specific entry |
-
-> The history file is automatically excluded from Library Sync — it won't be moved to your NAS or shown in the Library file browser.
+- **SQLite persistence** — stored at `SAAVN_DB_PATH` (falls back to localStorage on static deployments)
+- **Per-track album data** — individual track metadata stored for album downloads
+- **Automatic migration** — existing `.saavn-dl-history.json` files imported on first startup
+- **"Already downloaded" badges** — green checkmark on search results
+- **Filter & manage** — filter by tracks/albums, remove individual entries, clear all
+- **Deduplication** — re-downloading updates the timestamp instead of creating duplicates
 
 ---
 
@@ -290,44 +168,56 @@ saavn-dl keeps track of every song and album you download. A clock icon in the f
 | Mode | Description |
 |------|-------------|
 | ⚡ Fast | Direct download without metadata embedding |
-| ✨ Enhanced | Downloads audio and embeds metadata using ffmpeg.wasm |
-| 💿 Individual Files (Album) | Downloads all tracks as individual files |
-| 📁 Zip File (Album) | Downloads all tracks and stores them in a zip archive |
-| 📚 Save to Library (Album) | Saves tracks directly to a server-side folder (requires `SAAVN_LIBRARY_PATH`) |
-| 🔄 Library Sync | Moves staged files from SSD to NAS (requires both `SAAVN_LIBRARY_PATH` and `SAAVN_MUSIC_PATH`) |
+| ✨ Enhanced | Download + embed metadata via ffmpeg.wasm |
+| 💿 Individual Files | Album tracks as individual M4A files |
+| 📁 ZIP Archive | All album tracks bundled into a ZIP |
+| 📚 Save to Library | Tracks saved to server-side directory |
+| 🔄 Library Sync | Staged files moved from SSD to NAS |
 
 ---
 
 ## Navidrome Compatibility
 
-When downloading multi-artist albums (compilations, "feat." albums), music servers like [Navidrome](https://www.navidrome.org/) will split the album into separate entries if each track has a different Album Artist tag.
+Music servers like [Navidrome](https://www.navidrome.org/) split albums into separate entries when each track has a different Album Artist tag.
 
-saavn-dl automatically detects this and prompts you before downloading:
+saavn-dl detects this automatically:
 
-- If the album has tracks by different artists, a prompt appears asking if you want to set a unified **Album Artist** tag
-- The suggested value is the album's primary artist (or "Various Artists" for compilations)
-- You can edit the value or skip the fix entirely
-- When applied, every track in the batch gets the same `album_artist` metadata, keeping the album grouped as one entry in Navidrome
+1. Album has tracks by different artists → prompt appears
+2. Suggests the album's primary artist (or "Various Artists") as unified Album Artist
+3. You can edit the value or skip
+4. Applied to every track in the batch across all download modes
 
-This works across all album download modes (Individual Files, ZIP, Save to Library).
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/config` | Server capabilities (library, sync, history flags) |
+| `GET` | `/api/proxy?url=` | Proxy external fetches through server (VPN) |
+| `GET` | `/api/library/browse?path=` | List directory contents |
+| `POST` | `/api/library/sync` | Trigger immediate sync |
+| `GET` | `/api/library/sync/status` | Sync status + scheduler state |
+| `GET` | `/api/library/sync/config` | Current sync config |
+| `POST` | `/api/library/sync/config` | Update sync config |
+| `POST` | `/api/library/sync/reset-retries` | Reset retry counts |
+| `GET` | `/api/history` | List history entries (`?type=track\|album`) |
+| `GET` | `/api/history/ids` | Downloaded IDs for badge lookups |
+| `GET` | `/api/history/albums/:id/tracks` | Per-track data for an album |
+| `POST` | `/api/history` | Record a download |
+| `DELETE` | `/api/history` | Clear all history |
+| `DELETE` | `/api/history/:id` | Remove a specific entry |
 
 ---
 
 ## Disclaimer
 
-This project is intended for educational and personal use only.
+This project is for educational and personal use only.
 
-All music content, trademarks, album arts and related assets belong to their respective owners.
-
-This project:
-- does not host music
-- does not store copyrighted content
-- does not distribute media files
-
-Users are responsible for complying with their local copyright laws.
+All music content, trademarks, and album art belong to their respective owners. This project does not host, store, or distribute copyrighted media. Users are responsible for complying with their local copyright laws.
 
 ---
 
 ## License
 
-This project is licensed under the Mozilla Public License 2.0 (MPL-2.0).
+[Mozilla Public License 2.0 (MPL-2.0)](./LICENSE)
