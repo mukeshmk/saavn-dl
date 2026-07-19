@@ -362,8 +362,29 @@ class DownloadQueueManager {
         quality: item.quality,
         mode: '',
         songCount: 0,
+        duration: item.song.more_info?.duration || '0',
+        playCount: item.song.play_count || '0',
+        year: item.song.year || '',
+        language: item.song.language || '',
+        isExplicit: item.song.isExplicit || false,
       });
     } else {
+      // Build per-track data for the album
+      const tracks = (item.album.songs || []).map((song, idx) => ({
+        saavnId: song.id,
+        title: song.title,
+        artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '',
+        albumTitle: item.title,
+        albumArtist: item.albumArtistOverride || item.artist,
+        duration: song.more_info?.duration || '0',
+        playCount: song.play_count || '0',
+        year: song.year || item.album.year || '',
+        language: song.language || item.album.language || '',
+        trackNumber: idx + 1,
+        isExplicit: song.isExplicit || false,
+        image: song.image || item.album.image || '',
+      }));
+
       await recordDownload({
         saavnId: item.album.id,
         type: 'album',
@@ -374,6 +395,9 @@ class DownloadQueueManager {
         quality: item.quality,
         mode: item.mode,
         songCount: item.album.songs?.length || 0,
+        year: item.album.year || '',
+        language: item.album.language || '',
+        tracks,
       });
     }
   }

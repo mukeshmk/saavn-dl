@@ -7,6 +7,22 @@
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface HistoryTrackEntry {
+  saavnId: string;
+  title: string;
+  artist: string;
+  albumTitle: string;
+  albumArtist: string;
+  duration: string;
+  playCount: string;
+  year: string;
+  language: string;
+  trackNumber: number;
+  filePath?: string;
+  isExplicit: boolean;
+  image: string;
+}
+
 export interface HistoryEntry {
   id: string;
   saavnId: string;
@@ -19,6 +35,14 @@ export interface HistoryEntry {
   mode: string;
   songCount: number;
   downloadedAt: string;
+  // Extended fields for richer history
+  duration?: string;
+  playCount?: string;
+  year?: string;
+  language?: string;
+  isExplicit?: boolean;
+  // Per-track data for album entries (sent on POST, not returned on GET list)
+  tracks?: HistoryTrackEntry[];
 }
 
 export interface DownloadedIds {
