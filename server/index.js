@@ -14,6 +14,8 @@ import { createServer } from 'node:http';
 import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
 import { join, extname, resolve, normalize } from 'node:path';
 import { existsSync } from 'node:fs';
+import { initDb } from './db/index.js';
+import { runMigrations } from './db/migrations.js';
 import { handleLibraryRoute } from './library/routes.js';
 import { handleHistoryRoute } from './history/routes.js';
 import { handleProxyRoute } from './proxy.js';
@@ -23,6 +25,7 @@ const PORT = parseInt(process.env.PORT || '80', 10);
 const STATIC_DIR = resolve(process.env.STATIC_DIR || './dist');
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
+const DB_PATH = process.env.SAAVN_DB_PATH || './data/saavn-dl.db';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -92,6 +95,8 @@ async function handleApiConfig(req, res) {
     libraryEnabled: !!LIBRARY_PATH,
     musicPathEnabled: !!MUSIC_PATH,
     historyEnabled: true,
+    dbEnabled: true,
+    dbPath: DB_PATH,
   });
 }
 
@@ -232,9 +237,22 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// ─── Startup ──────────────────────────────────────────────────────────────────
+
+// Initialize database before accepting requests
+try {
+  initDb();
+  await runMigrations();
+} catch (err) {
+  console.error('[saavn-dl] FATAL: Database initialization failed:', err.message);
+  process.exit(1);
+}
+
 server.listen(PORT, () => {
   console.log(`[saavn-dl] Server running on port ${PORT}`);
   console.log(`[saavn-dl] Static dir: ${STATIC_DIR}`);
+  console.log(`[saavn-dl] Database: ${DB_PATH}`);
+
   if (LIBRARY_PATH) {
     console.log(`[saavn-dl] Library path: ${LIBRARY_PATH} (Save to Library enabled)`);
   } else {
