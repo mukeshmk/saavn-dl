@@ -1,0 +1,49 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ${BASE_PATH}/audio/gluetun:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=surfshark
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${SURFSHARK_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${SURFSHARK_ADDRESS}
+      - SERVER_COUNTRIES=${SURFSHARK_SERVER_COUNTRIES}
+    ports:
+      - 4173:80
+
+  saavn-dl:
+    image: saavn-dl:latest
+    container_name: saavn-dl
+    restart: unless-stopped
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SAAVN_LIBRARY_PATH: /app/downloads
+      SAAVN_MUSIC_PATH: /music
+      SAAVN_DB_PATH: /data/saavn-dl.db
+    volumes:
+      - ${MUSIC_PATH}:/music
+      - ${BASE_PATH}/audio/downloads:/app/downloads
+      - ${BASE_PATH}/audio/saavn-db:/data
+    network_mode: service:gluetun
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:80/api/config').then(r=>{if(!r.ok)throw r;process.exit(0)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
