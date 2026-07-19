@@ -5,37 +5,36 @@ import { sanitizeFilenameField } from '../types/metadata';
 
 interface MetadataEditorProps {
   original: TrackMetadata;
-  current:  TrackMetadata;
+  current: TrackMetadata;
   onUpdate: (meta: TrackMetadata) => void;
-  onReset:  () => void;
-  onClose:  () => void;
+  onReset: () => void;
+  onClose: () => void;
 }
 
 // ─── Field config ─────────────────────────────────────────────────────────────
 
 interface FieldDef {
-  key:         keyof Omit<TrackMetadata, 'filename'>;
-  label:       string;
+  key: keyof Omit<TrackMetadata, 'filename'>;
+  label: string;
   placeholder: string;
-  hint?:       string;
+  hint?: string;
 }
 
 const FIELDS: FieldDef[] = [
-  { key: 'title',       label: 'Track Title',   placeholder: 'Track title' },
-  { key: 'artist',      label: 'Artist',         placeholder: 'Artist name' },
-  { key: 'albumArtist', label: 'Album Artist',   placeholder: 'Album artist' },
-  { key: 'album',       label: 'Album',          placeholder: 'Album name' },
-  { key: 'genre',       label: 'Genre',          placeholder: 'e.g. Pop, Hip-Hop' },
-  { key: 'year',        label: 'Release Year',   placeholder: 'YYYY' },
-  { key: 'trackNumber', label: 'Track Number',   placeholder: 'e.g. 3 or 3/10' },
-  { key: 'discNumber',  label: 'Disc Number',    placeholder: 'e.g. 1 or 1/2' },
-  { key: 'composer',    label: 'Composer',       placeholder: 'Composer name' },
-  { key: 'copyright',   label: 'Copyright',      placeholder: '© Year Label' },
+  { key: 'title', label: 'Track Title', placeholder: 'Track title' },
+  { key: 'artist', label: 'Artist', placeholder: 'Artist name' },
+  { key: 'albumArtist', label: 'Album Artist', placeholder: 'Album artist' },
+  { key: 'album', label: 'Album', placeholder: 'Album name' },
+  { key: 'genre', label: 'Genre', placeholder: 'e.g. Pop, Hip-Hop' },
+  { key: 'year', label: 'Release Year', placeholder: 'YYYY' },
+  { key: 'trackNumber', label: 'Track Number', placeholder: 'e.g. 3 or 3/10' },
+  { key: 'discNumber', label: 'Disc Number', placeholder: 'e.g. 1 or 1/2' },
+  { key: 'composer', label: 'Composer', placeholder: 'Composer name' },
+  { key: 'copyright', label: 'Copyright', placeholder: '© Year Label' },
 ];
 
 const LOCKED_FIELDS = [
-  { label: 'Album Art',   value: 'Embedded automatically from JioSaavn' },
-  { label: 'Comment',  value: 'Downloaded via saavn-dl / Rhythmax' },
+  { label: 'Album Art', value: 'Embedded automatically from JioSaavn' },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -65,13 +64,13 @@ export default function MetadataEditor({
 
   const handleFilenameBlur = () => {
     const sanitized = sanitizeFilenameField(draft.filename);
-    const fallback  = sanitizeFilenameField(`${draft.title} - ${draft.artist}`);
+    const fallback = sanitizeFilenameField(`${draft.title} - ${draft.artist}`);
     set('filename', sanitized || fallback);
   };
 
   const handleUpdate = () => {
     const sanitized = sanitizeFilenameField(draft.filename);
-    const fallback  = sanitizeFilenameField(`${draft.title} - ${draft.artist}`);
+    const fallback = sanitizeFilenameField(`${draft.title} - ${draft.artist}`);
     onUpdate({ ...draft, filename: sanitized || fallback });
   };
 
@@ -92,8 +91,8 @@ export default function MetadataEditor({
     >
       <motion.div
         initial={{ opacity: 0, y: 48, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0,  scale: 1 }}
-        exit={{   opacity: 0, y: 24, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 24, scale: 0.97 }}
         transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
         className="
           w-full sm:max-w-lg
@@ -120,8 +119,8 @@ export default function MetadataEditor({
             className="p-1.5 text-text-muted hover:text-text-primary rounded-lg hover:bg-white/5 transition-colors"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="6"  x2="6"  y2="18"/>
-              <line x1="6"  y1="6"  x2="18" y2="18"/>
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
@@ -194,8 +193,8 @@ export default function MetadataEditor({
                   <p className="text-xs font-body text-white/40 truncate mt-0.5">{f.value}</p>
                 </div>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#44445a" strokeWidth="2" className="flex-shrink-0">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
               </div>
             ))}

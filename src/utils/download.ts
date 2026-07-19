@@ -161,7 +161,6 @@ async function embedWithCover(
     '-metadata', `date=${meta.year}`,
     '-metadata', `publisher=${meta.publisher}`,
     '-metadata', `copyright=${meta.copyright}`,
-    '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
     '-movflags', '+faststart',
     'out.mp4',
   ];
@@ -196,7 +195,6 @@ async function embedMetaOnly(
     '-metadata', `date=${meta.year}`,
     '-metadata', `publisher=${meta.publisher}`,
     '-metadata', `copyright=${meta.copyright}`,
-    '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
     '-movflags', '+faststart',
     'out_meta.mp4',
   ];
@@ -270,7 +268,6 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
       year: song.year,
       publisher: more_info.label,
       copyright: more_info.copyright_text,
-      comment: 'Downloaded via saavn-dl / Rhythmax',
       genre: '',
       trackNumber: '',
       discNumber: '',

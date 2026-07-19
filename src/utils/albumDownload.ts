@@ -206,7 +206,6 @@ async function trackToBlob(
       '-metadata', `album_artist=${albumArtist}`,
       '-metadata', `album=${meta.album}`,
       '-metadata', `date=${meta.year}`,
-      '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
       '-movflags', '+faststart',
       outF,
     ];
@@ -228,7 +227,6 @@ async function trackToBlob(
         '-metadata', `album_artist=${albumArtist}`,
         '-metadata', `album=${meta.album}`,
         '-metadata', `date=${meta.year}`,
-        '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
         '-movflags', '+faststart',
         outF,
       ];
@@ -246,7 +244,6 @@ async function trackToBlob(
       '-metadata', `album_artist=${albumArtist}`,
       '-metadata', `album=${meta.album}`,
       '-metadata', `date=${meta.year}`,
-      '-metadata', 'comment=Downloaded via saavn-dl / Rhythmax',
       '-movflags', '+faststart',
       outF,
     ];

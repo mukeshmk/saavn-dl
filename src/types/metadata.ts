@@ -29,17 +29,17 @@ export function buildDefaultMetadata(song: SaavnSong): TrackMetadata {
 
   return {
     filename,
-    title:       song.title,
+    title: song.title,
     artist,
     albumArtist: song.more_info.artists?.primary?.map((a) => a.name).join(', ') || artist,
-    album:       song.more_info.album       || '',
-    genre:       '',
-    year:        song.year                  || '',
+    album: song.more_info.album || '',
+    genre: '',
+    year: song.year || '',
     trackNumber: '',
-    discNumber:  '',
-    composer:    '',
-    copyright:   song.more_info.copyright_text || '',
-    comment:     'Downloaded via saavn-dl / Rhythmax',
+    discNumber: '',
+    composer: '',
+    copyright: song.more_info.copyright_text || '',
+    comment: '',
   };
 }
 
