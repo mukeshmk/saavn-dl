@@ -17,12 +17,16 @@ fi
 REMOTE_HOST="$1"
 [ -n "$2" ] && REMOTE_DIR="$2"
 
+# ── SSH multiplexing (authenticate once, reuse connection) ──────────────────────
+SSH_OPTS="-o ControlMaster=auto -o ControlPath=/tmp/deploy-%C -o ControlPersist=60s"
+
 # ── Create tarball ──────────────────────────────────────────────────────────────
 echo "📦 Creating tarball..."
 tar czf "$TARBALL" \
   --exclude='node_modules' \
   --exclude='dist' \
   --exclude='.git' \
+  --exclude='.history' \
   --exclude='.kiro' \
   --exclude='.DS_Store' \
   --exclude='*.log' \
@@ -33,14 +37,14 @@ echo "✅ Tarball created: $TARBALL ($(du -h "$TARBALL" | cut -f1))"
 
 # ── SCP to remote ──────────────────────────────────────────────────────────────
 echo "🚀 Copying to $REMOTE_HOST:$REMOTE_DIR..."
-ssh "$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
-scp "$TARBALL" "$REMOTE_HOST:$REMOTE_DIR/$TARBALL"
+ssh $SSH_OPTS "$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
+scp $SSH_OPTS "$TARBALL" "$REMOTE_HOST:$REMOTE_DIR/$TARBALL"
 
 # ── Extract on remote ──────────────────────────────────────────────────────────
 echo "📂 Extracting on remote..."
-ssh "$REMOTE_HOST" "cd $REMOTE_DIR && tar xzf $TARBALL && rm $TARBALL"
+ssh $SSH_OPTS "$REMOTE_HOST" "cd $REMOTE_DIR && tar xzf $TARBALL && rm $TARBALL"
 
-# ── Cleanup local tarball ──────────────────────────────────────────────────────
+# ── Cleanup ────────────────────────────────────────────────────────────────────
 rm "$TARBALL"
 
 echo ""
