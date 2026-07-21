@@ -429,11 +429,12 @@ export async function checkLibraryEnabled(): Promise<boolean> {
   }
 }
 
-async function saveToLibrary(blob: Blob, album: string, filename: string): Promise<string> {
+async function saveToLibrary(blob: Blob, artist: string, album: string, filename: string): Promise<string> {
   const resp = await fetch('/api/library/save', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/octet-stream',
+      'X-Artist': artist,
       'X-Album': album,
       'X-Filename': filename,
     },
@@ -482,8 +483,11 @@ export async function downloadAlbumLibrary(
         const artistName = getArtistT(songs[i]);
         const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
 
+        // Use album artist override (Navidrome fix) or album-level artist for folder structure
+        const folderArtist = albumArtistOverride || album.artists?.primary?.[0]?.name || artistName;
+
         emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 100));
-        const savedPath = await saveToLibrary(blob, albumFolder, filename);
+        const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
 
         tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
         resolved = true;

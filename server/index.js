@@ -108,6 +108,7 @@ async function handleLibrarySave(req, res) {
   }
 
   // Expect raw binary body with metadata in headers
+  const artist = req.headers['x-artist'] || '';
   const album = req.headers['x-album'] || 'Unknown Album';
   const filename = req.headers['x-filename'];
 
@@ -115,6 +116,7 @@ async function handleLibrarySave(req, res) {
     return jsonResponse(res, 400, { error: 'Missing x-filename header' });
   }
 
+  const safeArtist = artist ? sanitizePathSegment(artist) : '';
   const safeAlbum = sanitizePathSegment(album);
   const safeFilename = sanitizePathSegment(filename);
 
@@ -125,8 +127,10 @@ async function handleLibrarySave(req, res) {
   try {
     const body = await parseMultipartBody(req);
 
-    // Ensure target directory exists
-    const targetDir = join(LIBRARY_PATH, safeAlbum);
+    // Build path: Artist/Album/Track (or Album/Track if no artist provided)
+    const targetDir = safeArtist
+      ? join(LIBRARY_PATH, safeArtist, safeAlbum)
+      : join(LIBRARY_PATH, safeAlbum);
     await mkdir(targetDir, { recursive: true });
 
     const targetPath = join(targetDir, safeFilename);
@@ -140,9 +144,13 @@ async function handleLibrarySave(req, res) {
 
     await writeFile(targetPath, body);
 
+    const relativePath = safeArtist
+      ? `${safeArtist}/${safeAlbum}/${safeFilename}`
+      : `${safeAlbum}/${safeFilename}`;
+
     jsonResponse(res, 200, {
       success: true,
-      path: `${safeAlbum}/${safeFilename}`,
+      path: relativePath,
     });
   } catch (err) {
     console.error('[library/save] Error:', err.message);

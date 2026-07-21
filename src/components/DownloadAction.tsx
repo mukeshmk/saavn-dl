@@ -27,10 +27,12 @@ type Phase = 'idle' | 'working' | 'done' | 'error' | 'queued';
 
 async function saveTrackToLibrary(blob: Blob, song: SaavnSong, filename: string): Promise<string> {
   const album = song.more_info?.album || 'Unknown Album';
+  const artist = song.more_info?.artists?.primary?.[0]?.name || 'Unknown Artist';
   const resp = await fetch('/api/library/save', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/octet-stream',
+      'X-Artist': artist,
       'X-Album': album,
       'X-Filename': filename,
     },
