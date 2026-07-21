@@ -1,11 +1,12 @@
 import type { ArtistSearchResult, ArtistDetail } from '../types/saavn';
+import { proxyFetch } from './proxy';
 
 const SEARCH_API = 'https://rtmx.vercel.app/api/artists';
-  // Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+// Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
+// Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 const DETAIL_API = 'https://rtmx.vercel.app/api/artist';
-  // Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+// Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
+// Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 
 interface ArtistSearchApiResponse {
   total: number;
@@ -22,7 +23,7 @@ interface ArtistSearchApiResponse {
 
 export async function searchArtists(query: string): Promise<ArtistSearchResult[]> {
   if (!query.trim()) return [];
-  const res = await fetch(`${SEARCH_API}?q=${encodeURIComponent(query.trim())}`);
+  const res = await proxyFetch(`${SEARCH_API}?q=${encodeURIComponent(query.trim())}`);
   if (!res.ok) throw new Error(`Artist search failed: HTTP ${res.status}`);
   const data: ArtistSearchApiResponse = await res.json();
 
@@ -38,7 +39,7 @@ export async function searchArtists(query: string): Promise<ArtistSearchResult[]
 }
 
 export async function fetchArtistDetail(token: string, page = 0): Promise<ArtistDetail> {
-  const res = await fetch(`${DETAIL_API}?token=${encodeURIComponent(token)}&page=${page}`);
+  const res = await proxyFetch(`${DETAIL_API}?token=${encodeURIComponent(token)}&page=${page}`);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(txt || `Artist fetch failed: HTTP ${res.status}`);

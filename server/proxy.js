@@ -35,6 +35,8 @@ const ALLOWED_SUFFIXES = [
   '.saavncdn.com',
   '.jiosaavn.com',
   '.jio.com',
+  '.vercel.app',
+  '.workers.dev',
 ];
 
 function isAllowedHost(hostname) {

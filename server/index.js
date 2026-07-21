@@ -27,6 +27,7 @@ const STATIC_DIR = resolve(process.env.STATIC_DIR || './dist');
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
 const DB_PATH = process.env.SAAVN_DB_PATH || './data/saavn-dl.db';
+const FORCE_PROXY = process.env.SAAVN_FORCE_PROXY === 'true' || process.env.SAAVN_FORCE_PROXY === '1';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -99,6 +100,7 @@ async function handleApiConfig(req, res) {
     playlistsEnabled: true,
     dbEnabled: true,
     dbPath: DB_PATH,
+    forceProxy: FORCE_PROXY,
   });
 }
 

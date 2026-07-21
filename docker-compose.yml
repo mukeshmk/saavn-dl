@@ -30,6 +30,7 @@ services:
       SAAVN_LIBRARY_PATH: /app/downloads
       SAAVN_MUSIC_PATH: /music
       SAAVN_DB_PATH: /data/saavn-dl.db
+      SAAVN_FORCE_PROXY: "true"
     volumes:
       - ${MUSIC_PATH}:/music
       - ${BASE_PATH}/audio/downloads:/app/downloads

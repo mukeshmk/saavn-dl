@@ -21,7 +21,7 @@ Built with React 18, Vite, TypeScript, and TailwindCSS.
 - **Save to Library** — save tracks directly to a server-side directory (Artist/Album/Track structure)
 - **Library Sync** — stage downloads on a fast SSD and sync to NAS on a cron schedule
 - **Download History** — SQLite-backed history with "already downloaded" badges on search results
-- **VPN proxy** — all CDN fetches routed server-side, compatible with Gluetun/WireGuard
+- **Full VPN proxy** — all external traffic (API calls + media downloads) routed server-side, compatible with Gluetun/WireGuard
 
 ---
 
@@ -78,11 +78,11 @@ docker run -p 8080:80 \
 
 ### Running behind a VPN (Gluetun)
 
-When self-hosted, all audio and cover art fetches are routed through `/api/proxy`. Running behind [Gluetun](https://github.com/qdm12/gluetun) means all download traffic goes through the VPN tunnel while the browser only talks to your server.
+When self-hosted, **all external traffic** is routed through `/api/proxy` — this includes search/metadata API calls (`rtmx.vercel.app`, `sda.rhythmax.workers.dev`) as well as audio and cover art CDN fetches. Running behind [Gluetun](https://github.com/qdm12/gluetun) means every outbound request goes through the VPN tunnel while the browser only talks to your server.
 
 A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (Surfshark/WireGuard) + saavn-dl configured with VPN routing, Library Sync, and persistent SQLite storage. See [`docker-compose.yml`](./docker-compose.yml) for the full setup.
 
-> **Note:** Search and metadata API calls (`rtmx.vercel.app`, `sda.rhythmax.workers.dev`) are made directly by the browser — only actual media downloads are proxied through the VPN.
+> **Note:** On static deployments (e.g. Vercel) where the proxy is unavailable, the app falls back to direct browser fetches automatically. Set `SAAVN_FORCE_PROXY=true` to disable this fallback — requests will fail hard if the proxy is unreachable, preventing any traffic from leaking outside the VPN tunnel.
 
 ---
 
@@ -93,6 +93,7 @@ A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (
 | `SAAVN_LIBRARY_PATH` | _(empty)_ | Fast SSD staging directory. Empty = Save to Library disabled. |
 | `SAAVN_MUSIC_PATH` | _(empty)_ | Permanent NAS directory. Empty = Library Sync disabled. |
 | `SAAVN_DB_PATH` | `./data/saavn-dl.db` | Path to SQLite database file (Docker default: `/data/saavn-dl.db`). |
+| `SAAVN_FORCE_PROXY` | _(empty)_ | Set to `true` or `1` to prevent fallback to direct browser fetch. Requests fail if the VPN proxy is unreachable. |
 | `PORT` | `80` | Server listen port. |
 | `STATIC_DIR` | `./dist` | Path to built frontend assets. |
 
@@ -148,7 +149,7 @@ Queue multiple songs and albums, then keep browsing while they download sequenti
 - A floating indicator (top-right) shows active progress and queue count
 - Full management panel: cancel, pause/resume, reorder, retry, expand for details
 - Navidrome multi-artist fix applied automatically to queued albums
-- All downloads route through `/api/proxy` (VPN) when self-hosted
+- All traffic (API calls + downloads) routes through `/api/proxy` (VPN) when self-hosted
 
 ---
 
@@ -219,7 +220,7 @@ saavn-dl detects this automatically:
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/config` | Server capabilities (library, sync, history flags) |
-| `GET` | `/api/proxy?url=` | Proxy external fetches through server (VPN) |
+| `GET` | `/api/proxy?url=` | Proxy all external fetches through server (VPN) — API calls, audio, images |
 | `GET` | `/api/library/browse?path=` | List directory contents |
 | `POST` | `/api/library/sync` | Trigger immediate sync |
 | `GET` | `/api/library/sync/status` | Sync status + scheduler state |

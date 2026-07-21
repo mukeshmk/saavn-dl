@@ -1,22 +1,23 @@
 import type { PlaylistSearchResult, PlaylistDetail } from '../types/saavn';
+import { proxyFetch } from './proxy';
 
 const SEARCH_API = 'https://rtmx.vercel.app/api/playlists';
-  // Default API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+// Default API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
+// Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 const DETAIL_API = 'https://rtmx.vercel.app/api/playlist';
-  // Default API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+// Default API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
+// Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 
 export async function searchPlaylists(query: string): Promise<PlaylistSearchResult[]> {
   if (!query.trim()) return [];
-  const res = await fetch(`${SEARCH_API}?q=${encodeURIComponent(query.trim())}`);
+  const res = await proxyFetch(`${SEARCH_API}?q=${encodeURIComponent(query.trim())}`);
   if (!res.ok) throw new Error(`Playlist search failed: HTTP ${res.status}`);
   const data = await res.json();
   const arr: PlaylistSearchResult[] = Array.isArray(data)
     ? data
     : Array.isArray(data?.results)
-    ? data.results
-    : [];
+      ? data.results
+      : [];
   return arr.filter((r) => r.type === 'playlist' || r.id);
 }
 
@@ -36,7 +37,7 @@ export async function fetchPlaylistDetail(tokenOrUrl: string): Promise<PlaylistD
     ? extractPlaylistToken(tokenOrUrl)
     : tokenOrUrl;
 
-  const res = await fetch(`${DETAIL_API}?token=${encodeURIComponent(token)}`);
+  const res = await proxyFetch(`${DETAIL_API}?token=${encodeURIComponent(token)}`);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(txt || `Playlist fetch failed: HTTP ${res.status}`);

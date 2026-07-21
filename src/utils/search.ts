@@ -1,15 +1,16 @@
 import type { SearchResult } from '../types/saavn';
+import { proxyFetch } from './proxy';
 
 const SEARCH_API = 'https://rtmx.vercel.app/api/songs?q=';
-  // Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+// Defalut API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
+// Visit https://github.com/ODSkyler/jiosaavn-api for more information.
 
 interface SearchApiResponse {
   results: SearchResult[];
 }
 
 export async function searchSongs(query: string): Promise<SearchResult[]> {
-  const resp = await fetch(
+  const resp = await proxyFetch(
     `${SEARCH_API}${encodeURIComponent(query)}`
   );
 

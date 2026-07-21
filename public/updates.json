@@ -1,5 +1,11 @@
 [
   {
+    "id": 17,
+    "title": "Full VPN Proxy — All Traffic Routed",
+    "date": "21-07-2026",
+    "content": "When self-hosted behind a VPN (e.g. Gluetun), all external traffic now routes through the server-side proxy — not just audio and image downloads, but also search queries, album/playlist/artist lookups, and discover feed requests. Your browser never contacts external APIs directly. On static deployments (Vercel), the app still falls back to direct browser fetches automatically. Set SAAVN_FORCE_PROXY=true to disable the fallback entirely — if the proxy is unreachable, requests will fail instead of leaking traffic outside the VPN."
+  },
+  {
     "id": 16,
     "title": "Discover Tab — Personalized Suggestions",
     "date": "21-07-2026",

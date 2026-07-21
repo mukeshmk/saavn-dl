@@ -3,6 +3,8 @@
  * and trending data from the JioSaavn API.
  */
 
+import { proxyFetch } from './proxy';
+
 const API_BASE = 'https://rtmx.vercel.app/api';
 // Default API (rtmx.vercel.app). Replace with your jiosaavn-api instance.
 // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
@@ -63,7 +65,7 @@ export interface DiscoverData {
  */
 export async function fetchHomeFeed(languages?: string[]): Promise<HomeFeedSection[]> {
   const lang = languages?.join(',') || 'english';
-  const res = await fetch(`${API_BASE}/home?lang=${encodeURIComponent(lang)}`);
+  const res = await proxyFetch(`${API_BASE}/home?lang=${encodeURIComponent(lang)}`);
   if (!res.ok) throw new Error(`Home feed failed: HTTP ${res.status}`);
   const data = await res.json();
 
@@ -90,7 +92,7 @@ export async function fetchHomeFeed(languages?: string[]): Promise<HomeFeedSecti
  */
 export async function fetchNewReleases(languages?: string[]): Promise<DiscoverAlbum[]> {
   const lang = languages?.join(',') || 'english';
-  const res = await fetch(`${API_BASE}/new?lang=${encodeURIComponent(lang)}`);
+  const res = await proxyFetch(`${API_BASE}/new?lang=${encodeURIComponent(lang)}`);
   if (!res.ok) throw new Error(`New releases failed: HTTP ${res.status}`);
   const data = await res.json();
 
@@ -111,7 +113,7 @@ export async function fetchNewReleases(languages?: string[]): Promise<DiscoverAl
  */
 export async function fetchRelatedAlbums(albumId: string): Promise<DiscoverAlbum[]> {
   if (!albumId) return [];
-  const res = await fetch(`${API_BASE}/related?id=${encodeURIComponent(albumId)}`);
+  const res = await proxyFetch(`${API_BASE}/related?id=${encodeURIComponent(albumId)}`);
   if (!res.ok) return []; // Non-critical, fail silently
   const data = await res.json();
 
@@ -130,7 +132,7 @@ export async function fetchRelatedAlbums(albumId: string): Promise<DiscoverAlbum
  */
 export async function fetchArtistPlaylists(artistToken: string): Promise<DiscoverPlaylist[]> {
   if (!artistToken) return [];
-  const res = await fetch(`${API_BASE}/artist?token=${encodeURIComponent(artistToken)}&page=0`);
+  const res = await proxyFetch(`${API_BASE}/artist?token=${encodeURIComponent(artistToken)}&page=0`);
   if (!res.ok) return [];
   const data = await res.json();
 
