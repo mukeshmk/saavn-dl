@@ -9,14 +9,16 @@ Built with React 18, Vite, TypeScript, and TailwindCSS.
 
 ## Features
 
-- **Search & browse** — paste a JioSaavn URL or search by song, album, or artist name
+- **Search & browse** — paste a JioSaavn URL or search by song, album, artist, or playlist name
 - **Artist discographies** — browse an artist's albums, singles, and latest releases
+- **Playlist support** — search JioSaavn curated playlists, view track lists, download entire playlists
+- **Discover tab** — personalized suggestions with trending, new releases, curated playlists, and related albums
 - **Audio preview** — listen before you download
 - **Quality selector** — up to 320 kbps M4A
 - **Metadata editor** — edit title, artist, album, year per-track before downloading
 - **Navidrome compatibility** — auto-detects multi-artist albums and offers a unified Album Artist tag
-- **Background download queue** — queue multiple songs/albums with pause, cancel, reorder, and retry
-- **Save to Library** — save tracks directly to a server-side directory
+- **Background download queue** — queue multiple songs/albums/playlists with pause, cancel, reorder, and retry
+- **Save to Library** — save tracks directly to a server-side directory (Artist/Album/Track structure)
 - **Library Sync** — stage downloads on a fast SSD and sync to NAS on a cron schedule
 - **Download History** — SQLite-backed history with "already downloaded" badges on search results
 - **VPN proxy** — all CDN fetches routed server-side, compatible with Gluetun/WireGuard
@@ -101,7 +103,7 @@ A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (
 Set `SAAVN_LIBRARY_PATH` to enable a "Save to Library" button in the album download modal. Tracks are saved as:
 
 ```
-/library/<Album Name> (Year)/01 - Song Title - Artist.m4a
+/library/<Artist>/<Album Name> (Year)/01 - Song Title - Artist.m4a
 ```
 
 ### Without Docker
@@ -159,6 +161,30 @@ A clock icon in the footer opens the History page. All completed downloads are t
 - **"Already downloaded" badges** — green checkmark on search results
 - **Filter & manage** — filter by tracks/albums, remove individual entries, clear all
 - **Deduplication** — re-downloading updates the timestamp instead of creating duplicates
+
+---
+
+## Playlist Downloads
+
+Search for JioSaavn's curated and editorial playlists from the "Playlists" tab in search. View the full track list with audio previews and per-track metadata editing.
+
+- Download entire playlists as individual files, ZIP, or save to library
+- Each track keeps its own album/artist metadata — the playlist is just a selection mechanism
+- Files land in the standard `Artist/Album (Year)/Track.m4a` structure regardless of playlist
+- Queue entire playlists for background download
+
+---
+
+## Discover (Suggestions)
+
+The **Discover** tab shows personalized music suggestions based on your download history:
+
+- **Trending** — popular playlists and charts from JioSaavn's home feed
+- **New Releases** — latest albums filtered by your preferred languages
+- **More Like Your Last Download** — related albums from JioSaavn's recommendation engine
+- **Editorial Picks** — curated playlists by JioSaavn editors
+
+Works without any history (defaults to English trending content). As you download more, suggestions become language-aware and show related content.
 
 ---
 

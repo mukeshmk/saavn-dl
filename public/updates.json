@@ -1,5 +1,17 @@
 [
   {
+    "id": 16,
+    "title": "Discover Tab — Personalized Suggestions",
+    "date": "21-07-2026",
+    "content": "A new Discover tab shows music suggestions based on your download history. Browse trending playlists, new releases (filtered by your preferred languages), related albums from your last download, and JioSaavn editorial picks. Each row scrolls horizontally — click any card to open its detail page and download."
+  },
+  {
+    "id": 15,
+    "title": "Playlist Search & Download",
+    "date": "21-07-2026",
+    "content": "You can now search and download JioSaavn curated playlists! A new \"Playlists\" tab in the search bar lets you find editorial playlists, view the full track list with audio previews and per-track metadata editing, then download the entire playlist as individual files, ZIP, or save to library. Each track keeps its own album and artist metadata. Queue entire playlists for background download."
+  },
+  {
     "id": 14,
     "title": "History Search & Pagination",
     "date": "21-07-2026",
