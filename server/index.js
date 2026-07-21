@@ -17,8 +17,10 @@ import { existsSync } from 'node:fs';
 import { initDb } from './db/index.js';
 import { handleLibraryRoute } from './library/routes.js';
 import { handleHistoryRoute } from './history/routes.js';
+import { handlePlaylistRoute } from './playlists/routes.js';
 import { handleProxyRoute } from './proxy.js';
 import { initScheduler } from './library/sync-scheduler.js';
+import { backfillFilePaths } from './playlists/store.js';
 
 const PORT = parseInt(process.env.PORT || '80', 10);
 const STATIC_DIR = resolve(process.env.STATIC_DIR || './dist');
@@ -94,6 +96,7 @@ async function handleApiConfig(req, res) {
     libraryEnabled: !!LIBRARY_PATH,
     musicPathEnabled: !!MUSIC_PATH,
     historyEnabled: true,
+    playlistsEnabled: true,
     dbEnabled: true,
     dbPath: DB_PATH,
   });
@@ -225,6 +228,11 @@ const server = createServer(async (req, res) => {
       const handled = await handleHistoryRoute(req, res, url, jsonResponse);
       if (handled !== false) return;
     }
+    // Playlist routes (/api/playlists*)
+    if (url.pathname === '/api/playlists' || url.pathname.startsWith('/api/playlists/')) {
+      const handled = await handlePlaylistRoute(req, res, url, jsonResponse);
+      if (handled !== false) return;
+    }
 
     // Static files
     await serveStatic(req, res);
@@ -259,6 +267,14 @@ server.listen(PORT, () => {
   if (MUSIC_PATH) {
     console.log(`[saavn-dl] Music path: ${MUSIC_PATH} (Sync to NAS enabled)`);
     initScheduler();
+    // Run file path backfill in background (populates file_path for existing tracks)
+    backfillFilePaths(MUSIC_PATH).then(result => {
+      if (result.matched > 0) {
+        console.log(`[saavn-dl] File path backfill: ${result.matched} matched, ${result.unmatched} unmatched of ${result.total} tracks`);
+      }
+    }).catch(err => {
+      console.warn('[saavn-dl] File path backfill failed:', err.message);
+    });
   } else {
     console.log(`[saavn-dl] SAAVN_MUSIC_PATH not set — Sync to NAS disabled`);
   }
