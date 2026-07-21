@@ -1,5 +1,17 @@
 [
   {
+    "id": 14,
+    "title": "History Search & Pagination",
+    "date": "21-07-2026",
+    "content": "The History page now supports searching by title or artist, paginated results, and a clear/restore workflow — clear all entries and undo if you change your mind, without permanently deleting until you navigate away."
+  },
+  {
+    "id": 13,
+    "title": "Redesigned Navigation & Layout",
+    "date": "21-07-2026",
+    "content": "The UI has been redesigned with a cleaner layout. Navigation has moved from footer icons to a top segmented control (Search, Library, History) right below the header. The GitHub link and Updates button now live in the header row alongside the title. The search bar and content area feel more spacious and the overall flow is snappier."
+  },
+  {
     "id": 12,
     "title": "SQLite Database Backend",
     "date": "19-07-2026",
