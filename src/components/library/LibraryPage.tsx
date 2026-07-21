@@ -51,7 +51,7 @@ function formatDate(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface LibraryPageProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export default function LibraryPage({ onBack }: LibraryPageProps) {
@@ -140,22 +140,24 @@ export default function LibraryPage({ onBack }: LibraryPageProps) {
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Back button */}
-      <motion.button
-        initial={{ opacity: 0, x: -6 }}
-        animate={{ opacity: 1, x: 0 }}
-        onClick={onBack}
-        className="mb-4 flex items-center gap-1.5 text-[12px] font-mono text-text-muted hover:text-cyan transition-colors group"
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-          className="group-hover:-translate-x-0.5 transition-transform"><polyline points="15 18 9 12 15 6"/></svg>
-        Back to home
-      </motion.button>
+      {onBack && (
+        <motion.button
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={onBack}
+          className="mb-4 flex items-center gap-1.5 text-[12px] font-mono text-text-muted hover:text-cyan transition-colors group"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            className="group-hover:-translate-x-0.5 transition-transform"><polyline points="15 18 9 12 15 6" /></svg>
+          Back to home
+        </motion.button>
+      )}
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
         <div className="w-9 h-9 rounded-xl bg-cyan/10 border border-cyan/20 flex items-center justify-center">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
           </svg>
         </div>
         <div>
@@ -185,9 +187,8 @@ export default function LibraryPage({ onBack }: LibraryPageProps) {
                   setExpandedDirs({});
                   fetchBrowse(target);
                 }}
-                className={`text-[11px] font-mono transition-colors ${
-                  i === pathParts.length - 1 ? 'text-text-primary' : 'text-cyan hover:text-cyan-dim'
-                }`}
+                className={`text-[11px] font-mono transition-colors ${i === pathParts.length - 1 ? 'text-text-primary' : 'text-cyan hover:text-cyan-dim'
+                  }`}
               >
                 {part}
               </button>
@@ -206,7 +207,7 @@ export default function LibraryPage({ onBack }: LibraryPageProps) {
         ) : error ? (
           <div className="p-5 flex items-start gap-3">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b8a" strokeWidth="2" className="flex-shrink-0 mt-0.5">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             <div>
               <p className="text-sm font-display font-semibold text-rose">Failed to load</p>
@@ -232,7 +233,7 @@ export default function LibraryPage({ onBack }: LibraryPageProps) {
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02] transition-colors text-left"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted">
-                  <polyline points="15 18 9 12 15 6"/>
+                  <polyline points="15 18 9 12 15 6" />
                 </svg>
                 <span className="text-[12px] font-mono text-text-muted">..</span>
               </button>
@@ -300,7 +301,7 @@ function EntryRow({
                 width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
                 className={`text-text-muted transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
               >
-                <polyline points="9 18 15 12 9 6"/>
+                <polyline points="9 18 15 12 9 6" />
               </svg>
             )}
           </button>
@@ -312,7 +313,7 @@ function EntryRow({
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
               className={isExpanded ? 'text-cyan' : 'text-text-muted'}>
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
             <span className="text-[12px] font-mono text-text-primary truncate">{entry.name}</span>
           </button>
@@ -363,8 +364,8 @@ function EntryRow({
     >
       {/* File icon */}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted/60 flex-shrink-0">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
       </svg>
 
       {/* Name */}
