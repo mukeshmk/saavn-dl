@@ -12,6 +12,7 @@ import HistoryPage from './components/history/HistoryPage';
 import ArtistPage from './components/artist/ArtistPage';
 import ArtistResultCard from './components/artist/ArtistResultCard';
 import { DownloadQueueProvider } from './components/DownloadQueueContext';
+import { DownloadPrefsProvider } from './components/DownloadPrefsContext';
 import DownloadIndicator from './components/DownloadIndicator';
 import DownloadManagerPanel from './components/DownloadManagerPanel';
 import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail, ArtistSearchResult, ArtistDetail } from './types/saavn';
@@ -278,258 +279,260 @@ export default function App() {
   const downloadedAlbumIds = new Set(downloadedIds.albums);
 
   return (
-    <DownloadQueueProvider>
-      <div className="min-h-screen bg-void relative overflow-x-hidden">
-        {/* Download indicator (top-right) */}
-        <DownloadIndicator onClick={() => setShowDownloadPanel(true)} />
-        {/* Download manager panel */}
-        <DownloadManagerPanel isOpen={showDownloadPanel} onClose={() => setShowDownloadPanel(false)} />
-        {/* Ambient bg */}
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-mesh-cyan" />
-          <div className="absolute inset-0 bg-mesh-rose" />
-          <div className="absolute inset-0 opacity-[0.012]" style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px)',
-            backgroundSize: '40px 40px',
-          }} />
-        </div>
-
-        <div className="relative z-10 flex flex-col items-center min-h-screen px-4 py-8 sm:py-12">
-
-          {/* Header row — title left, icons right */}
-          <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="w-full max-w-2xl mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1
-                  onClick={goHome}
-                  className="text-2xl font-display font-bold text-text-primary tracking-tight cursor-pointer hover:opacity-80 transition-opacity"
-                >
-                  saavn<span className="text-cyan">-dl</span>
-                </h1>
-                <p className="text-[12px] text-white/50 font-body mt-0.5">
-                  Download from JioSaavn · up to <span className="text-cyan font-mono">320 kbps</span>
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <a href="https://github.com/mukeshmk/saavn-dl" target="_blank" rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-white hover:border-white/20 hover:bg-white/5 transition-all duration-200" aria-label="GitHub">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.866-.013-1.699-2.782.605-3.37-1.343-3.37-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.31.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.523 2 12 2z" />
-                  </svg>
-                </a>
-                <button onClick={() => setShowUpdates(true)}
-                  className="w-8 h-8 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200" aria-label="Updates">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Segmented control — top-level navigation */}
-          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }} className="w-full max-w-2xl mb-6">
-            <div className="inline-flex rounded-xl border border-border bg-glass/50 p-1">
-              {(
-                musicPathEnabled
-                  ? (['search', 'library', 'history'] as Section[])
-                  : (['search', 'history'] as Section[])
-              ).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSection(s)}
-                  className={`relative px-5 py-1.5 rounded-lg text-[12px] font-display font-semibold capitalize transition-all duration-200 ${section === s
-                    ? 'bg-cyan/15 text-cyan border border-cyan/30'
-                    : 'text-text-muted hover:text-text-secondary border border-transparent'
-                    }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Search bar — only when search section is active */}
-          {section === 'search' && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }} className="w-full max-w-2xl">
-              <SearchBar
-                key={searchBarKey}
-                onUrlFetch={handleUrlFetch}
-                onAlbumFetch={handleAlbumFetch}
-                onSearch={handleSearch}
-                isLoading={isAnyLoading}
-              />
-            </motion.div>
-          )}
-
-          {/* Search type sub-tabs — only when search section is active and relevant */}
-          {section === 'search' && (
-            <AnimatePresence>
-              {(showSearch || view.type === 'idle') && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="w-full max-w-2xl mt-4 flex gap-1"
-                >
-                  {(['songs', 'albums', 'artists'] as SearchTab[]).map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setSearchTab(tab)}
-                      className={`px-4 py-1.5 rounded-lg text-[12px] font-display font-semibold capitalize transition-all duration-150 ${searchTab === tab
-                        ? 'bg-cyan/10 border border-cyan/30 text-cyan'
-                        : 'border border-transparent text-text-muted hover:text-text-secondary hover:border-border'
-                        }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          )}
-
-          {/* Content area */}
-          <div className="w-full max-w-2xl mt-5">
-            <AnimatePresence mode="wait">
-
-              {/* ─── Search section content ─── */}
-              {section === 'search' && (
-                <>
-                  {/* URL loading skeletons */}
-                  {view.type === 'fetching-song' && (
-                    <motion.div key="song-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <TrackSkeleton />
-                    </motion.div>
-                  )}
-                  {view.type === 'fetching-album' && (
-                    <motion.div key="album-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <AlbumSkeleton />
-                    </motion.div>
-                  )}
-
-                  {/* URL/generic error */}
-                  {view.type === 'error' && view.context === 'url' && (
-                    <FetchError key="url-error" message={view.message} />
-                  )}
-
-                  {/* Song TrackCard */}
-                  {view.type === 'track' && (
-                    <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
-                      {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
-                      <TrackCard song={view.song} />
-                    </motion.div>
-                  )}
-
-                  {/* Album page */}
-                  {view.type === 'album' && (
-                    <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
-                    </motion.div>
-                  )}
-
-                  {/* Artist page */}
-                  {view.type === 'artist' && (
-                    <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
-                    </motion.div>
-                  )}
-
-                  {/* Song search results */}
-                  {showSongResults && (
-                    <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <SearchErrorBanner error={searchError} />
-                      <SearchResults
-                        results={view.type === 'song-results' || view.type === 'fetching-song-result' ? view.results : []}
-                        query={
-                          view.type === 'searching-songs' ? view.query
-                            : view.type === 'song-results' ? view.query
-                              : view.type === 'fetching-song-result' ? view.query
-                                : ''
-                        }
-                        isSearching={view.type === 'searching-songs'}
-                        fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
-                        onSelect={handleSongResultSelect}
-                        error={view.type === 'error' && view.context === 'search' ? view.message : ''}
-                        downloadedTrackIds={downloadedTrackIds}
-                      />
-                    </motion.div>
-                  )}
-
-                  {/* Album search results */}
-                  {showAlbumResults && (
-                    <motion.div key="album-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <SearchErrorBanner error={searchError} />
-                      <AlbumResultsPanel
-                        view={view}
-                        onSelect={handleAlbumResultSelect}
-                        downloadedAlbumIds={downloadedAlbumIds}
-                      />
-                    </motion.div>
-                  )}
-
-                  {/* Artist search results */}
-                  {showArtistResults && (
-                    <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <SearchErrorBanner error={searchError} />
-                      <ArtistResultsPanel
-                        view={view}
-                        onSelect={handleArtistResultSelect}
-                      />
-                    </motion.div>
-                  )}
-                </>
-              )}
-
-              {/* ─── Library section ─── */}
-              {section === 'library' && (
-                <motion.div key="library-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <LibraryPage />
-                </motion.div>
-              )}
-
-              {/* ─── History section ─── */}
-              {section === 'history' && (
-                <motion.div key="history-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <HistoryPage />
-                </motion.div>
-              )}
-
-            </AnimatePresence>
+    <DownloadPrefsProvider>
+      <DownloadQueueProvider>
+        <div className="min-h-screen bg-void relative overflow-x-hidden">
+          {/* Download indicator (top-right) */}
+          <DownloadIndicator onClick={() => setShowDownloadPanel(true)} />
+          {/* Download manager panel */}
+          <DownloadManagerPanel isOpen={showDownloadPanel} onClose={() => setShowDownloadPanel(false)} />
+          {/* Ambient bg */}
+          <div className="fixed inset-0 pointer-events-none">
+            <div className="absolute inset-0 bg-mesh-cyan" />
+            <div className="absolute inset-0 bg-mesh-rose" />
+            <div className="absolute inset-0 opacity-[0.012]" style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px)',
+              backgroundSize: '40px 40px',
+            }} />
           </div>
 
-          {/* Updates modal */}
-          <AnimatePresence>{showUpdates && (<motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-          >
-            <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+          <div className="relative z-10 flex flex-col items-center min-h-screen px-4 py-8 sm:py-12">
+
+            {/* Header row — title left, icons right */}
+            <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="w-full max-w-2xl mb-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-display font-bold text-text-primary">Updates</h2>
-                <button onClick={() => setShowUpdates(false)} className="text-text-muted hover:text-white transition-colors">✕</button>
+                <div>
+                  <h1
+                    onClick={goHome}
+                    className="text-2xl font-display font-bold text-text-primary tracking-tight cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    saavn<span className="text-cyan">-dl</span>
+                  </h1>
+                  <p className="text-[12px] text-white/50 font-body mt-0.5">
+                    Download from JioSaavn · up to <span className="text-cyan font-mono">320 kbps</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href="https://github.com/mukeshmk/saavn-dl" target="_blank" rel="noopener noreferrer"
+                    className="w-8 h-8 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-white hover:border-white/20 hover:bg-white/5 transition-all duration-200" aria-label="GitHub">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.866-.013-1.699-2.782.605-3.37-1.343-3.37-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.31.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.523 2 12 2z" />
+                    </svg>
+                  </a>
+                  <button onClick={() => setShowUpdates(true)}
+                    className="w-8 h-8 rounded-full bg-glass border border-border flex items-center justify-center text-text-muted hover:text-cyan hover:border-cyan/30 hover:bg-cyan/10 transition-all duration-200" aria-label="Updates">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                {updates.map((u: UpdateItem) => (
-                  <div key={u.id} className="rounded-2xl border border-border bg-glass p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-text-primary">{u.title}</p>
-                      <span className="text-[10px] font-mono text-cyan/80">{u.date}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-white/90">{u.content}</p>
-                  </div>
+            </motion.div>
+
+            {/* Segmented control — top-level navigation */}
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }} className="w-full max-w-2xl mb-6">
+              <div className="inline-flex rounded-xl border border-border bg-glass/50 p-1">
+                {(
+                  musicPathEnabled
+                    ? (['search', 'library', 'history'] as Section[])
+                    : (['search', 'history'] as Section[])
+                ).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSection(s)}
+                    className={`relative px-5 py-1.5 rounded-lg text-[12px] font-display font-semibold capitalize transition-all duration-200 ${section === s
+                      ? 'bg-cyan/15 text-cyan border border-cyan/30'
+                      : 'text-text-muted hover:text-text-secondary border border-transparent'
+                      }`}
+                  >
+                    {s}
+                  </button>
                 ))}
               </div>
-            </div>
-          </motion.div>
-          )}
-          </AnimatePresence>
+            </motion.div>
 
+            {/* Search bar — only when search section is active */}
+            {section === 'search' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }} className="w-full max-w-2xl">
+                <SearchBar
+                  key={searchBarKey}
+                  onUrlFetch={handleUrlFetch}
+                  onAlbumFetch={handleAlbumFetch}
+                  onSearch={handleSearch}
+                  isLoading={isAnyLoading}
+                />
+              </motion.div>
+            )}
+
+            {/* Search type sub-tabs — only when search section is active and relevant */}
+            {section === 'search' && (
+              <AnimatePresence>
+                {(showSearch || view.type === 'idle') && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full max-w-2xl mt-4 flex gap-1"
+                  >
+                    {(['songs', 'albums', 'artists'] as SearchTab[]).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setSearchTab(tab)}
+                        className={`px-4 py-1.5 rounded-lg text-[12px] font-display font-semibold capitalize transition-all duration-150 ${searchTab === tab
+                          ? 'bg-cyan/10 border border-cyan/30 text-cyan'
+                          : 'border border-transparent text-text-muted hover:text-text-secondary hover:border-border'
+                          }`}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            )}
+
+            {/* Content area */}
+            <div className="w-full max-w-2xl mt-5">
+              <AnimatePresence mode="wait">
+
+                {/* ─── Search section content ─── */}
+                {section === 'search' && (
+                  <>
+                    {/* URL loading skeletons */}
+                    {view.type === 'fetching-song' && (
+                      <motion.div key="song-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <TrackSkeleton />
+                      </motion.div>
+                    )}
+                    {view.type === 'fetching-album' && (
+                      <motion.div key="album-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <AlbumSkeleton />
+                      </motion.div>
+                    )}
+
+                    {/* URL/generic error */}
+                    {view.type === 'error' && view.context === 'url' && (
+                      <FetchError key="url-error" message={view.message} />
+                    )}
+
+                    {/* Song TrackCard */}
+                    {view.type === 'track' && (
+                      <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
+                        {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
+                        <TrackCard song={view.song} />
+                      </motion.div>
+                    )}
+
+                    {/* Album page */}
+                    {view.type === 'album' && (
+                      <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
+                      </motion.div>
+                    )}
+
+                    {/* Artist page */}
+                    {view.type === 'artist' && (
+                      <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
+                      </motion.div>
+                    )}
+
+                    {/* Song search results */}
+                    {showSongResults && (
+                      <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <SearchErrorBanner error={searchError} />
+                        <SearchResults
+                          results={view.type === 'song-results' || view.type === 'fetching-song-result' ? view.results : []}
+                          query={
+                            view.type === 'searching-songs' ? view.query
+                              : view.type === 'song-results' ? view.query
+                                : view.type === 'fetching-song-result' ? view.query
+                                  : ''
+                          }
+                          isSearching={view.type === 'searching-songs'}
+                          fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
+                          onSelect={handleSongResultSelect}
+                          error={view.type === 'error' && view.context === 'search' ? view.message : ''}
+                          downloadedTrackIds={downloadedTrackIds}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Album search results */}
+                    {showAlbumResults && (
+                      <motion.div key="album-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <SearchErrorBanner error={searchError} />
+                        <AlbumResultsPanel
+                          view={view}
+                          onSelect={handleAlbumResultSelect}
+                          downloadedAlbumIds={downloadedAlbumIds}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Artist search results */}
+                    {showArtistResults && (
+                      <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <SearchErrorBanner error={searchError} />
+                        <ArtistResultsPanel
+                          view={view}
+                          onSelect={handleArtistResultSelect}
+                        />
+                      </motion.div>
+                    )}
+                  </>
+                )}
+
+                {/* ─── Library section ─── */}
+                {section === 'library' && (
+                  <motion.div key="library-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <LibraryPage />
+                  </motion.div>
+                )}
+
+                {/* ─── History section ─── */}
+                {section === 'history' && (
+                  <motion.div key="history-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <HistoryPage />
+                  </motion.div>
+                )}
+
+              </AnimatePresence>
+            </div>
+
+            {/* Updates modal */}
+            <AnimatePresence>{showUpdates && (<motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            >
+              <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/80 backdrop-blur-xl p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-display font-bold text-text-primary">Updates</h2>
+                  <button onClick={() => setShowUpdates(false)} className="text-text-muted hover:text-white transition-colors">✕</button>
+                </div>
+                <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                  {updates.map((u: UpdateItem) => (
+                    <div key={u.id} className="rounded-2xl border border-border bg-glass p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-text-primary">{u.title}</p>
+                        <span className="text-[10px] font-mono text-cyan/80">{u.date}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-white/90">{u.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+            )}
+            </AnimatePresence>
+
+          </div>
         </div>
-      </div>
-    </DownloadQueueProvider>
+      </DownloadQueueProvider>
+    </DownloadPrefsProvider>
   );
 }
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { AlbumDetail, SaavnSong } from '../../types/saavn';
 import { albumImage, proxyImage, totalAlbumDuration, formatDuration } from '../../types/saavn';
 import AudioPreview from '../AudioPreview';
-import DownloadButton from '../DownloadButton';
+import DownloadAction from '../DownloadAction';
 import MetadataEditor from '../MetadataEditor';
 import QualitySelector from '../QualitySelector';
 import AlbumDownloadModal from './AlbumDownloadModal';
@@ -317,18 +317,19 @@ function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps)
                 <button
                   onClick={() => setShowMetaEditor(true)}
                   className={`px-3 py-2 rounded-xl border transition-all duration-200 text-[11px] font-display font-medium whitespace-nowrap ${metaModified
-                      ? 'border-white/20 bg-white/5 text-white/80 hover:bg-white/10'
-                      : 'border-border bg-glass text-white/40 hover:border-cyan/30 hover:text-white/60'
+                    ? 'border-white/20 bg-white/5 text-white/80 hover:bg-white/10'
+                    : 'border-border bg-glass text-white/40 hover:border-cyan/30 hover:text-white/60'
                     }`}
                 >
                   {metaModified ? 'Meta Updated' : 'Edit Meta'}
                 </button>
                 <div className="flex-1">
-                  <DownloadButton
+                  <DownloadAction
                     song={song}
                     quality={quality}
                     overrideMeta={metaModified ? editedMeta! : undefined}
                     overrideFilename={metaModified ? editedMeta!.filename : undefined}
+                    compact
                   />
                 </div>
               </div>

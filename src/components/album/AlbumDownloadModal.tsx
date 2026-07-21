@@ -11,11 +11,12 @@ import {
   downloadAlbumIndividual,
   downloadAlbumZip,
   downloadAlbumLibrary,
-  checkLibraryEnabled,
   estimateAlbumSizeMB,
   detectMultiArtist,
 } from '../../utils/albumDownload';
 import { useDownloadQueue } from '../DownloadQueueContext';
+import { useDownloadPrefs } from '../DownloadPrefsContext';
+import type { AlbumDownloadAction } from '../DownloadPrefsContext';
 import { recordDownload } from '../../utils/history';
 
 type ModalPhase = 'config' | 'downloading' | 'done' | 'error';
@@ -35,18 +36,25 @@ interface Props {
 export default function AlbumDownloadModal({ album, onClose }: Props) {
   const [phase, setPhase] = useState<ModalPhase>('config');
   const [quality, setQuality] = useState<Quality>('320');
-  const [mode, setMode] = useState<AlbumDownloadMode>('zip');
   const [progress, setProgress] = useState<AlbumDownloadProgress | null>(null);
   const [failure, setFailure] = useState<PendingFailure | null>(null);
   const [globalError, setGlobalError] = useState('');
-  const [libraryEnabled, setLibraryEnabled] = useState(false);
 
-  useEffect(() => {
-    checkLibraryEnabled().then((enabled) => {
-      setLibraryEnabled(enabled);
-      if (enabled) setMode('library');
-    });
-  }, []);
+  const { albumAction, libraryEnabled, setAlbumAction } = useDownloadPrefs();
+
+  // Map context albumAction to AlbumDownloadMode
+  const actionToMode = (action: AlbumDownloadAction): AlbumDownloadMode => {
+    if (action === 'queue') return 'zip'; // queue uses whatever mode was last set
+    return action as AlbumDownloadMode;
+  };
+
+  const [mode, setMode] = useState<AlbumDownloadMode>(actionToMode(albumAction));
+
+  // Sync mode changes back to prefs context
+  const handleModeChange = (m: AlbumDownloadMode) => {
+    setMode(m);
+    setAlbumAction(m as AlbumDownloadAction);
+  };
 
   // Multi-artist detection for Navidrome compatibility
   const multiArtistInfo = detectMultiArtist(album);
@@ -188,7 +196,7 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
                       return (
                         <button
                           key={m}
-                          onClick={() => !isDisabled && setMode(m)}
+                          onClick={() => !isDisabled && handleModeChange(m)}
                           disabled={isDisabled}
                           className={`flex flex-col items-center gap-2 p-3.5 rounded-xl border text-[13px] font-display font-semibold transition-all duration-150 ${isDisabled
                             ? 'border-border bg-glass/50 text-text-muted cursor-not-allowed opacity-50'
