@@ -125,6 +125,29 @@ function createSchema(db) {
       last_attempt TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Playlists: user-created playlists (manual or auto-generated)
+    CREATE TABLE IF NOT EXISTS playlists (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      auto_generate INTEGER NOT NULL DEFAULT 0,
+      auto_criteria TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(name)
+    );
+
+    -- Playlist tracks: ordered track membership in playlists
+    CREATE TABLE IF NOT EXISTS playlist_tracks (
+      playlist_id TEXT NOT NULL,
+      track_id TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      added_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (playlist_id, track_id),
+      FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+      FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
+    );
+
     -- Indexes for common queries
     CREATE INDEX IF NOT EXISTS idx_tracks_album_id ON tracks(album_id);
     CREATE INDEX IF NOT EXISTS idx_tracks_saavn_id ON tracks(saavn_id);
@@ -133,6 +156,8 @@ function createSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_tracks_downloaded_at ON tracks(downloaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_albums_downloaded_at ON albums(downloaded_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sync_runs_timestamp ON sync_runs(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
+    CREATE INDEX IF NOT EXISTS idx_playlist_tracks_position ON playlist_tracks(playlist_id, position);
   `);
 }
 
