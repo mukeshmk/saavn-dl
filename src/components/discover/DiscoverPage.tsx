@@ -1,20 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { proxyImage } from '../../types/saavn';
-import type { PlaylistDetail, AlbumDetail } from '../../types/saavn';
+import type { PlaylistDetail, AlbumDetail, SaavnSong } from '../../types/saavn';
 import { fetchHomeFeed, fetchNewReleases, fetchRelatedAlbums, fetchArtistPlaylists, getPersonalizationData } from '../../utils/discover';
 import type { HomeFeedSection, DiscoverAlbum, DiscoverPlaylist } from '../../utils/discover';
 import { fetchPlaylistDetail } from '../../utils/playlist';
 import { fetchAlbumDetail } from '../../utils/album';
+import { proxyFetch } from '../../utils/proxy';
 
 interface Props {
   onPlaylistSelect: (playlist: PlaylistDetail) => void;
   onAlbumSelect: (album: AlbumDetail) => void;
+  onSongSelect?: (song: SaavnSong) => void;
+  downloadedAlbumIds?: Set<string>;
+  downloadedTrackIds?: Set<string>;
 }
 
 export default function DiscoverPage({
   onPlaylistSelect,
   onAlbumSelect,
+  onSongSelect,
+  downloadedAlbumIds,
+  downloadedTrackIds,
 }: Props) {
   const [homeSections, setHomeSections] = useState<HomeFeedSection[]>([]);
   const [newReleases, setNewReleases] = useState<DiscoverAlbum[]>([]);
@@ -74,13 +81,26 @@ export default function DiscoverPage({
   };
 
   const handleAlbumClick = async (item: DiscoverAlbum) => {
-    const url = item.perma_url || item.album_url;
+    const url = item.perma_url || item.album_url || item.url;
     if (!url) {
       console.warn('No URL for album:', item.title, item);
       return;
     }
     setLoadingItem(item.id);
     try {
+      // If the item is a song (single track), try fetching as a song first
+      if (item.type === 'song' && onSongSelect) {
+        const SONG_API = 'https://sda.rhythmax.workers.dev';
+        const resp = await proxyFetch(`${SONG_API}/song?url=${encodeURIComponent(url)}`);
+        if (resp.ok) {
+          const song = await resp.json();
+          if (song?.id && song?.more_info?.encrypted_media_url) {
+            onSongSelect(song);
+            return;
+          }
+        }
+        // If song fetch fails, try as album (some singles are listed as albums)
+      }
       const detail = await fetchAlbumDetail(url);
       onAlbumSelect(detail);
     } catch (err) {
@@ -130,6 +150,8 @@ export default function DiscoverPage({
           loadingItem={loadingItem}
           onAlbumClick={handleAlbumClick}
           onPlaylistClick={handlePlaylistClick}
+          downloadedAlbumIds={downloadedAlbumIds}
+          downloadedTrackIds={downloadedTrackIds}
         />
       )}
 
@@ -142,6 +164,8 @@ export default function DiscoverPage({
           loadingItem={loadingItem}
           onAlbumClick={handleAlbumClick}
           onPlaylistClick={handlePlaylistClick}
+          downloadedAlbumIds={downloadedAlbumIds}
+          downloadedTrackIds={downloadedTrackIds}
         />
       )}
 
@@ -154,6 +178,8 @@ export default function DiscoverPage({
           loadingItem={loadingItem}
           onAlbumClick={handleAlbumClick}
           onPlaylistClick={handlePlaylistClick}
+          downloadedAlbumIds={downloadedAlbumIds}
+          downloadedTrackIds={downloadedTrackIds}
         />
       )}
 
@@ -167,6 +193,8 @@ export default function DiscoverPage({
           loadingItem={loadingItem}
           onAlbumClick={handleAlbumClick}
           onPlaylistClick={handlePlaylistClick}
+          downloadedAlbumIds={downloadedAlbumIds}
+          downloadedTrackIds={downloadedTrackIds}
         />
       ))}
     </motion.div>
@@ -182,9 +210,11 @@ interface DiscoverRowProps {
   loadingItem: string | null;
   onAlbumClick: (item: DiscoverAlbum) => void;
   onPlaylistClick: (item: DiscoverPlaylist) => void;
+  downloadedAlbumIds?: Set<string>;
+  downloadedTrackIds?: Set<string>;
 }
 
-function DiscoverRow({ title, items, type, loadingItem, onAlbumClick, onPlaylistClick }: DiscoverRowProps) {
+function DiscoverRow({ title, items, type, loadingItem, onAlbumClick, onPlaylistClick, downloadedAlbumIds, downloadedTrackIds }: DiscoverRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -247,6 +277,13 @@ function DiscoverRow({ title, items, type, loadingItem, onAlbumClick, onPlaylist
             item={item}
             type={type}
             isLoading={loadingItem === item.id}
+            isDownloaded={
+              item.type === 'playlist'
+                ? false
+                : item.type === 'song'
+                  ? downloadedTrackIds?.has(item.id) || false
+                  : downloadedAlbumIds?.has(item.id) || false
+            }
             onClick={() => {
               if (item.type === 'playlist') {
                 onPlaylistClick(item as DiscoverPlaylist);
@@ -268,9 +305,10 @@ interface DiscoverCardProps {
   type: 'album' | 'playlist' | 'mixed';
   isLoading: boolean;
   onClick: () => void;
+  isDownloaded?: boolean;
 }
 
-function DiscoverCard({ item, type, isLoading, onClick }: DiscoverCardProps) {
+function DiscoverCard({ item, type, isLoading, onClick, isDownloaded }: DiscoverCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -345,6 +383,13 @@ function DiscoverCard({ item, type, isLoading, onClick }: DiscoverCardProps) {
       {/* Text */}
       <p className="text-[12px] font-display font-semibold text-text-primary leading-tight line-clamp-2 group-hover:text-cyan-300 transition-colors">
         {item.title}
+        {isDownloaded && (
+          <span className="inline-flex ml-1 align-middle px-1 py-0.5 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-bold font-mono rounded leading-none items-center gap-0.5">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+        )}
       </p>
       <p className="text-[10px] text-text-muted font-body mt-0.5 truncate">
         {artist}

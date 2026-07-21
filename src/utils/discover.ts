@@ -19,6 +19,7 @@ export interface DiscoverAlbum {
   type: string;
   perma_url?: string;
   album_url?: string;
+  url?: string;
   image: string;
   language?: string;
   year?: string;

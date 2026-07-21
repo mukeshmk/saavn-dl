@@ -473,7 +473,7 @@ export default function App() {
                   {/* Album page */}
                   {view.type === 'album' && (
                     <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
+                      <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} downloadedTrackIds={downloadedTrackIds} />
                     </motion.div>
                   )}
 
@@ -487,7 +487,7 @@ export default function App() {
                   {/* Playlist page */}
                   {view.type === 'playlist' && (
                     <motion.div key={`playlist-${view.playlist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <PlaylistPage playlist={view.playlist} onBack={view.fromSearch ? goBack : undefined} />
+                      <PlaylistPage playlist={view.playlist} onBack={view.fromSearch ? goBack : undefined} downloadedTrackIds={downloadedTrackIds} />
                     </motion.div>
                   )}
 
@@ -559,6 +559,12 @@ export default function App() {
                     setSection('search');
                     setView({ type: 'album', album, fromSearch: false });
                   }}
+                  onSongSelect={(song) => {
+                    setSection('search');
+                    setView({ type: 'track', song, fromSearch: false });
+                  }}
+                  downloadedAlbumIds={downloadedAlbumIds}
+                  downloadedTrackIds={downloadedTrackIds}
                 />
               )}
 

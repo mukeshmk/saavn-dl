@@ -14,6 +14,7 @@ import type { AlbumDetail } from '../../types/saavn';
 interface Props {
   playlist: PlaylistDetail;
   onBack?: () => void;
+  downloadedTrackIds?: Set<string>;
 }
 
 /**
@@ -40,7 +41,7 @@ function playlistAsAlbum(playlist: PlaylistDetail): AlbumDetail {
   };
 }
 
-export default function PlaylistPage({ playlist, onBack }: Props) {
+export default function PlaylistPage({ playlist, onBack, downloadedTrackIds }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [globalQuality, setGlobalQuality] = useState<Quality>('320');
@@ -175,6 +176,7 @@ export default function PlaylistPage({ playlist, onBack }: Props) {
                 quality={globalQuality}
                 isExpanded={expandedId === song.id}
                 onToggle={() => setExpandedId(prev => prev === song.id ? null : song.id)}
+                isDownloaded={downloadedTrackIds?.has(song.id)}
               />
             ))}
           </div>
@@ -230,9 +232,10 @@ interface TrackRowProps {
   quality: Quality;
   isExpanded: boolean;
   onToggle: () => void;
+  isDownloaded?: boolean;
 }
 
-function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps) {
+function TrackRow({ song, index, quality, isExpanded, onToggle, isDownloaded }: TrackRowProps) {
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [showMetaEditor, setShowMetaEditor] = useState(false);
@@ -289,9 +292,18 @@ function TrackRow({ song, index, quality, isExpanded, onToggle }: TrackRowProps)
 
         {/* Text */}
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-display font-semibold leading-tight truncate ${isExpanded ? 'text-cyan-300' : 'text-text-primary'}`}>
-            {song.title}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className={`text-sm font-display font-semibold leading-tight truncate ${isExpanded ? 'text-cyan-300' : 'text-text-primary'}`}>
+              {song.title}
+            </p>
+            {isDownloaded && (
+              <span className="flex-shrink-0 px-1 py-0.5 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[9px] font-bold font-mono rounded leading-none flex items-center gap-0.5">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            )}
+          </div>
           <p className="text-[11px] text-text-muted font-body mt-0.5 truncate">
             {artist}{albumName ? ` · ${albumName}` : ''}
           </p>
