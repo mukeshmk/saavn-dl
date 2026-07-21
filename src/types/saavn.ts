@@ -234,8 +234,48 @@ export function isSaavnArtistUrl(value: string): boolean {
   return /jiosaavn\.com\/artist\//i.test(value.trim());
 }
 
+export function isSaavnPlaylistUrl(value: string): boolean {
+  return /jiosaavn\.com\/(featured|s\/playlist)\//i.test(value.trim());
+}
+
 /** Extract artist token from a JioSaavn artist URL */
 export function extractArtistToken(url: string): string {
   const parts = url.trim().replace(/\/$/, '').split('/');
   return parts[parts.length - 1] || '';
+}
+
+// ─── Playlist types ───────────────────────────────────────────────────────────
+
+export interface PlaylistSearchResult {
+  id: string;
+  token: string;
+  title: string;
+  subtitle: string;
+  type: 'playlist';
+  image: string;
+  perma_url: string;
+  more_info: {
+    firstname?: string;
+    artist_name?: string[];
+    entity_type?: string;
+    song_count?: string;
+    language?: string;
+  };
+}
+
+export interface PlaylistDetail {
+  id: string;
+  token: string;
+  title: string;
+  subtitle: string;
+  header_desc: string;
+  type: 'playlist';
+  perma_url: string;
+  image: string;
+  more_info: {
+    firstname?: string;
+    subtitle_desc?: string[];
+  };
+  list_count: string;
+  songs: SaavnSong[];
 }
