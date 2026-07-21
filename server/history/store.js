@@ -26,54 +26,89 @@ export function addEntry(entry) {
 }
 
 /**
- * Get all history entries, optionally filtered by type.
- * Returns entries in reverse chronological order (most recent first).
+ * Get history entries with pagination and optional search.
+ * Returns { entries, total } in reverse chronological order (most recent first).
+ *
+ * @param {object} opts
+ * @param {string} [opts.type] - 'track' | 'album' | undefined (all)
+ * @param {number} [opts.limit] - max entries to return (default 20)
+ * @param {number} [opts.offset] - offset for pagination (default 0)
+ * @param {string} [opts.search] - search query (matches title or artist)
  */
-export function getEntries(type) {
+export function getEntries({ type, limit = 20, offset = 0, search } = {}) {
   const db = getDb();
 
+  const searchFilter = search ? `%${search}%` : null;
+
   if (type === 'track') {
-    // Return standalone tracks (no album_id) — these are individually downloaded songs
+    const whereClause = searchFilter
+      ? 'WHERE album_id IS NULL AND (title LIKE ? OR artist LIKE ?)'
+      : 'WHERE album_id IS NULL';
+    const params = searchFilter ? [searchFilter, searchFilter] : [];
+
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM tracks ${whereClause}`).get(...params).count;
+
     const rows = db.prepare(`
       SELECT id, saavn_id AS saavnId, title, artist, album_title AS album, image,
              quality, duration, play_count AS playCount, year, language,
              track_number AS trackNumber, file_path AS filePath, is_explicit AS isExplicit,
              downloaded_at AS downloadedAt
-      FROM tracks WHERE album_id IS NULL
+      FROM tracks ${whereClause}
       ORDER BY downloaded_at DESC
-    `).all();
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
 
-    return rows.map((r) => ({ ...r, type: 'track', isExplicit: !!r.isExplicit }));
+    return { entries: rows.map((r) => ({ ...r, type: 'track', isExplicit: !!r.isExplicit })), total };
   }
 
   if (type === 'album') {
+    const whereClause = searchFilter
+      ? 'WHERE title LIKE ? OR artist LIKE ?'
+      : '';
+    const params = searchFilter ? [searchFilter, searchFilter] : [];
+
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM albums ${whereClause}`).get(...params).count;
+
     const rows = db.prepare(`
       SELECT id, saavn_id AS saavnId, title, artist, image, quality, mode,
              song_count AS songCount, year, language, downloaded_at AS downloadedAt
-      FROM albums ORDER BY downloaded_at DESC
-    `).all();
+      FROM albums ${whereClause}
+      ORDER BY downloaded_at DESC
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
 
-    return rows.map((r) => ({ ...r, type: 'album' }));
+    return { entries: rows.map((r) => ({ ...r, type: 'album' })), total };
   }
 
   // All entries — combine albums and standalone tracks, sorted by date
+  // For "all" we query both tables with search, combine, sort, and paginate in JS
+  const albumWhere = searchFilter ? 'WHERE title LIKE ? OR artist LIKE ?' : '';
+  const trackWhere = searchFilter
+    ? 'WHERE album_id IS NULL AND (title LIKE ? OR artist LIKE ?)'
+    : 'WHERE album_id IS NULL';
+  const albumParams = searchFilter ? [searchFilter, searchFilter] : [];
+  const trackParams = searchFilter ? [searchFilter, searchFilter] : [];
+
   const albums = db.prepare(`
     SELECT id, saavn_id AS saavnId, 'album' AS type, title, artist, image, quality, mode,
            song_count AS songCount, year, language, downloaded_at AS downloadedAt
-    FROM albums
-  `).all();
+    FROM albums ${albumWhere}
+  `).all(...albumParams);
 
   const tracks = db.prepare(`
     SELECT id, saavn_id AS saavnId, 'track' AS type, title, artist, album_title AS album, image,
            quality, duration, play_count AS playCount, year, language,
            file_path AS filePath, is_explicit AS isExplicit, downloaded_at AS downloadedAt
-    FROM tracks WHERE album_id IS NULL
-  `).all();
+    FROM tracks ${trackWhere}
+  `).all(...trackParams);
 
   const all = [...albums, ...tracks.map((r) => ({ ...r, isExplicit: !!r.isExplicit }))];
   all.sort((a, b) => b.downloadedAt.localeCompare(a.downloadedAt));
 
-  return all;
+  const total = all.length;
+  const entries = all.slice(offset, offset + limit);
+
+  return { entries, total };
 }
 
 /**

@@ -130,28 +130,61 @@ export async function recordDownload(entry: Omit<HistoryEntry, 'id' | 'downloade
   lsWrite(entries);
 }
 
+export interface HistoryResponse {
+  entries: HistoryEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface HistoryQueryParams {
+  type?: 'track' | 'album';
+  limit?: number;
+  offset?: number;
+  search?: string;
+}
+
 /**
- * Get all history entries.
+ * Get history entries with pagination and optional search.
  */
-export async function getHistory(type?: 'track' | 'album'): Promise<HistoryEntry[]> {
+export async function getHistory(params: HistoryQueryParams = {}): Promise<HistoryResponse> {
+  const { type, limit = 20, offset = 0, search } = params;
   const useServer = await isServerAvailable();
 
   if (useServer) {
     try {
-      const params = type ? `?type=${type}` : '';
-      const resp = await fetch(`/api/history${params}`);
+      const qp = new URLSearchParams();
+      if (type) qp.set('type', type);
+      qp.set('limit', String(limit));
+      qp.set('offset', String(offset));
+      if (search) qp.set('search', search);
+      const resp = await fetch(`/api/history?${qp.toString()}`);
       if (resp.ok) {
         const data = await resp.json();
-        return data.entries || [];
+        return {
+          entries: data.entries || [],
+          total: data.total ?? (data.entries?.length || 0),
+          limit: data.limit ?? limit,
+          offset: data.offset ?? offset,
+        };
       }
     } catch {
       // Fall through to localStorage
     }
   }
 
-  const entries = lsRead();
-  if (type) return entries.filter((e) => e.type === type);
-  return entries;
+  // localStorage fallback — client-side filtering/pagination
+  let entries = lsRead();
+  if (type) entries = entries.filter((e) => e.type === type);
+  if (search) {
+    const q = search.toLowerCase();
+    entries = entries.filter(
+      (e) => e.title.toLowerCase().includes(q) || e.artist.toLowerCase().includes(q)
+    );
+  }
+  const total = entries.length;
+  const sliced = entries.slice(offset, offset + limit);
+  return { entries: sliced, total, limit, offset };
 }
 
 /**

@@ -39,12 +39,15 @@ function parseBody(req) {
 export async function handleHistoryRoute(req, res, url, jsonResponse) {
   const pathname = url.pathname;
 
-  // GET /api/history — list entries
+  // GET /api/history — list entries (paginated, searchable)
   if (pathname === '/api/history' && req.method === 'GET') {
     try {
       const type = url.searchParams.get('type') || undefined;
-      const entries = getEntries(type);
-      return jsonResponse(res, 200, { entries });
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit')) || 20, 1), 100);
+      const offset = Math.max(parseInt(url.searchParams.get('offset')) || 0, 0);
+      const search = url.searchParams.get('search') || undefined;
+      const { entries, total } = getEntries({ type, limit, offset, search });
+      return jsonResponse(res, 200, { entries, total, limit, offset });
     } catch (err) {
       return jsonResponse(res, 500, { error: err.message });
     }

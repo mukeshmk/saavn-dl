@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getHistory, removeFromHistory, clearAllHistory } from '../../utils/history';
-import type { HistoryEntry } from '../../utils/history';
+import { getHistory } from '../../utils/history';
+import type { HistoryEntry, HistoryQueryParams } from '../../utils/history';
 import { proxyImage } from '../../types/saavn';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,38 +36,77 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>('all');
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [cleared, setCleared] = useState(false);
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce search input
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0); // reset to first page on new search
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [search]);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const type = filter === 'all' ? undefined : filter;
-      const data = await getHistory(type);
-      setEntries(data);
+      const params: HistoryQueryParams = {
+        type: filter === 'all' ? undefined : filter,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        search: debouncedSearch || undefined,
+      };
+      const data = await getHistory(params);
+      setEntries(data.entries);
+      setTotal(data.total);
     } catch {
       setEntries([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, page, debouncedSearch]);
 
   useEffect(() => {
+    if (cleared) return; // don't fetch if UI is cleared
     loadHistory();
-  }, [loadHistory]);
+  }, [loadHistory, cleared]);
 
-  const handleRemove = async (id: string) => {
-    await removeFromHistory(id);
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-  };
+  // Reset page when filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [filter]);
 
-  const handleClearAll = async () => {
-    await clearAllHistory();
+  const handleClearUI = () => {
     setEntries([]);
-    setShowClearConfirm(false);
+    setTotal(0);
+    setCleared(true);
   };
 
-  const trackCount = entries.filter((e) => e.type === 'track').length;
-  const albumCount = entries.filter((e) => e.type === 'album').length;
+  const handleRestore = () => {
+    setCleared(false);
+    setPage(0);
+    // loadHistory will re-run due to cleared changing + effect dependency
+  };
+
+  // Re-fetch when cleared changes to false
+  useEffect(() => {
+    if (!cleared) {
+      loadHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleared]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <motion.div
@@ -89,39 +132,91 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
           <div>
             <h2 className="text-lg font-display font-bold text-text-primary">Download History</h2>
             <p className="text-[11px] font-mono text-text-muted mt-0.5">
-              {entries.length === 0 ? 'No downloads yet' : `${entries.length} item${entries.length !== 1 ? 's' : ''}`}
+              {cleared ? 'History cleared (still in database)' : total === 0 ? 'No downloads yet' : `${total} item${total !== 1 ? 's' : ''}`}
             </p>
           </div>
         </div>
 
-        {entries.length > 0 && (
-          <button
-            onClick={() => setShowClearConfirm(true)}
-            className="px-3 py-1.5 text-[11px] font-mono rounded-lg border border-rose/20 text-rose/80 hover:bg-rose/10 hover:border-rose/40 transition-all"
-          >
-            Clear all
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {cleared ? (
+            <button
+              onClick={handleRestore}
+              className="px-3 py-1.5 text-[11px] font-mono rounded-lg border border-cyan/20 text-cyan/80 hover:bg-cyan/10 hover:border-cyan/40 transition-all"
+            >
+              Restore history
+            </button>
+          ) : (
+            entries.length > 0 && (
+              <button
+                onClick={handleClearUI}
+                className="px-3 py-1.5 text-[11px] font-mono rounded-lg border border-rose/20 text-rose/80 hover:bg-rose/10 hover:border-rose/40 transition-all"
+              >
+                Clear all
+              </button>
+            )
+          )}
+        </div>
       </div>
+
+      {/* Search bar */}
+      {!cleared && (
+        <div className="relative mb-4">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/60"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by title or artist..."
+            className="w-full pl-9 pr-4 py-2 text-sm font-body rounded-xl border border-border bg-glass text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-cyan/40 focus:ring-1 focus:ring-cyan/20 transition-all"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted/60 hover:text-text-primary transition-colors"
+              aria-label="Clear search"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter tabs */}
-      <div className="flex gap-1 mb-4">
-        {(['all', 'track', 'album'] as FilterTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setFilter(tab)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-display font-semibold capitalize transition-all duration-150 ${filter === tab
-              ? 'bg-cyan/10 border border-cyan/30 text-cyan'
-              : 'border border-transparent text-text-muted hover:text-text-secondary hover:border-border'
-              }`}
-          >
-            {tab === 'all' ? `All (${trackCount + albumCount})` : tab === 'track' ? `Tracks (${trackCount})` : `Albums (${albumCount})`}
-          </button>
-        ))}
-      </div>
+      {!cleared && (
+        <div className="flex gap-1 mb-4">
+          {(['all', 'track', 'album'] as FilterTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilter(tab)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-display font-semibold capitalize transition-all duration-150 ${filter === tab
+                ? 'bg-cyan/10 border border-cyan/30 text-cyan'
+                : 'border border-transparent text-text-muted hover:text-text-secondary hover:border-border'
+                }`}
+            >
+              {tab === 'all' ? 'All' : tab === 'track' ? 'Tracks' : 'Albums'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Loading state */}
-      {loading && (
+      {loading && !cleared && (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
@@ -139,7 +234,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       )}
 
       {/* Empty state */}
-      {!loading && entries.length === 0 && (
+      {!loading && !cleared && entries.length === 0 && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -151,15 +246,48 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <p className="text-sm font-display font-semibold text-text-secondary">No downloads recorded</p>
+          <p className="text-sm font-display font-semibold text-text-secondary">
+            {debouncedSearch ? 'No results found' : 'No downloads recorded'}
+          </p>
           <p className="text-xs font-mono text-text-muted mt-1.5">
-            {filter !== 'all' ? `No ${filter} downloads yet` : 'Downloaded tracks and albums will appear here'}
+            {debouncedSearch
+              ? `Nothing matches "${debouncedSearch}"`
+              : filter !== 'all'
+                ? `No ${filter} downloads yet`
+                : 'Downloaded tracks and albums will appear here'}
           </p>
         </motion.div>
       )}
 
+      {/* Cleared state */}
+      {cleared && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-16"
+        >
+          <div className="text-4xl mb-3">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto text-text-muted/30">
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            </svg>
+          </div>
+          <p className="text-sm font-display font-semibold text-text-secondary">History cleared from view</p>
+          <p className="text-xs font-mono text-text-muted mt-1.5">
+            Your download history is still safely stored in the database.
+          </p>
+          <button
+            onClick={handleRestore}
+            className="mt-4 px-4 py-2 text-xs font-display font-semibold rounded-xl border border-cyan/30 text-cyan hover:bg-cyan/10 hover:border-cyan/50 transition-all"
+          >
+            Restore history
+          </button>
+        </motion.div>
+      )}
+
       {/* Entry list */}
-      {!loading && entries.length > 0 && (
+      {!loading && !cleared && entries.length > 0 && (
         <div className="space-y-2">
           <AnimatePresence initial={false}>
             {entries.map((entry, index) => (
@@ -167,50 +295,40 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                 key={entry.id}
                 entry={entry}
                 index={index}
-                onRemove={handleRemove}
+                onHide={(id) => {
+                  setEntries((prev) => prev.filter((e) => e.id !== id));
+                  setTotal((prev) => prev - 1);
+                }}
               />
             ))}
           </AnimatePresence>
         </div>
       )}
 
-      {/* Clear confirmation modal */}
-      <AnimatePresence>
-        {showClearConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      {/* Pagination */}
+      {!loading && !cleared && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-border">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="px-3 py-1.5 text-[11px] font-mono rounded-lg border border-border text-text-secondary hover:text-white hover:border-white/20 disabled:opacity-30 disabled:pointer-events-none transition-all"
           >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm rounded-2xl border border-white/10 bg-black/90 backdrop-blur-xl p-6 shadow-2xl"
-            >
-              <h3 className="text-base font-display font-bold text-text-primary">Clear all history?</h3>
-              <p className="text-xs text-text-muted mt-2">
-                This will permanently remove all download history records. This action cannot be undone.
-              </p>
-              <div className="flex gap-2 mt-5">
-                <button
-                  onClick={() => setShowClearConfirm(false)}
-                  className="flex-1 px-4 py-2 rounded-xl border border-border text-sm font-display text-text-secondary hover:text-white hover:border-white/20 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleClearAll}
-                  className="flex-1 px-4 py-2 rounded-xl border border-rose/30 bg-rose/10 text-sm font-display text-rose hover:bg-rose/20 hover:border-rose/50 transition-all"
-                >
-                  Clear all
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            ← Previous
+          </button>
+
+          <span className="text-[11px] font-mono text-text-muted">
+            Page {page + 1} of {totalPages}
+          </span>
+
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1.5 text-[11px] font-mono rounded-lg border border-border text-text-secondary hover:text-white hover:border-white/20 disabled:opacity-30 disabled:pointer-events-none transition-all"
+          >
+            Next →
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -220,11 +338,11 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
 function HistoryEntryCard({
   entry,
   index,
-  onRemove,
+  onHide,
 }: {
   entry: HistoryEntry;
   index: number;
-  onRemove: (id: string) => void;
+  onHide: (id: string) => void;
 }) {
   const [imgError, setImgError] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -288,7 +406,7 @@ function HistoryEntryCard({
               <span className="text-[10px] font-mono text-text-muted">{entry.quality} kbps</span>
             </>
           )}
-          {isAlbum && entry.songCount > 0 && (
+          {isAlbum && entry.songCount && entry.songCount > 0 && (
             <>
               <span className="text-text-muted/40">·</span>
               <span className="text-[10px] font-mono text-text-muted">{entry.songCount} tracks</span>
@@ -297,9 +415,9 @@ function HistoryEntryCard({
         </div>
       </div>
 
-      {/* Date + remove */}
+      {/* Date + hide */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-[10px] font-mono text-text-muted hidden sm:block">
+        <span className="text-[10px] font-mono text-text-muted">
           {formatDate(entry.downloadedAt)}
         </span>
 
@@ -307,7 +425,7 @@ function HistoryEntryCard({
           <button
             onClick={() => setShowConfirm(true)}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted/50 opacity-0 group-hover:opacity-100 hover:text-rose hover:bg-rose/10 transition-all"
-            aria-label="Remove from history"
+            aria-label="Hide from history"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -326,9 +444,9 @@ function HistoryEntryCard({
               </svg>
             </button>
             <button
-              onClick={() => onRemove(entry.id)}
+              onClick={() => onHide(entry.id)}
               className="w-6 h-6 rounded flex items-center justify-center text-rose hover:bg-rose/20 transition-colors"
-              aria-label="Confirm remove"
+              aria-label="Confirm hide"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <polyline points="20 6 9 17 4 12" />
