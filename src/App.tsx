@@ -11,6 +11,7 @@ import LibraryPage from './components/library/LibraryPage';
 import HistoryPage from './components/history/HistoryPage';
 import ArtistPage from './components/artist/ArtistPage';
 import ArtistResultCard from './components/artist/ArtistResultCard';
+import PlaylistsPage from './components/playlists/PlaylistsPage';
 import { DownloadQueueProvider } from './components/DownloadQueueContext';
 import { DownloadPrefsProvider } from './components/DownloadPrefsContext';
 import DownloadIndicator from './components/DownloadIndicator';
@@ -30,7 +31,7 @@ const SONG_API = 'https://sda.rhythmax.workers.dev';
 
 // ─── Top-level section ────────────────────────────────────────────────────────
 
-type Section = 'search' | 'library' | 'history';
+type Section = 'search' | 'library' | 'playlists' | 'history';
 
 // ─── Search tab ───────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export default function App() {
   const [updates, setUpdates] = useState<UpdateItem[]>([]);
   const [showDownloadPanel, setShowDownloadPanel] = useState(false);
   const [musicPathEnabled, setMusicPathEnabled] = useState(false);
+  const [playlistsEnabled, setPlaylistsEnabled] = useState(false);
   const [downloadedIds, setDownloadedIds] = useState<DownloadedIds>({ tracks: [], albums: [] });
   const lastSongSearch = useRef<{ results: SearchResult[]; query: string } | null>(null);
   const lastAlbumSearch = useRef<{ results: AlbumSearchResult[]; query: string } | null>(null);
@@ -97,6 +99,7 @@ export default function App() {
   useEffect(() => {
     fetch('/api/config').then(r => r.json()).then(data => {
       if (data.musicPathEnabled) setMusicPathEnabled(true);
+      if (data.playlistsEnabled) setPlaylistsEnabled(true);
     }).catch(() => { });
   }, []);
 
@@ -333,9 +336,13 @@ export default function App() {
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }} className="w-full max-w-2xl mb-6">
               <div className="inline-flex rounded-xl border border-border bg-glass/50 p-1">
                 {(
-                  musicPathEnabled
-                    ? (['search', 'library', 'history'] as Section[])
-                    : (['search', 'history'] as Section[])
+                  (() => {
+                    const sections: Section[] = ['search'];
+                    if (musicPathEnabled) sections.push('library');
+                    if (playlistsEnabled) sections.push('playlists');
+                    sections.push('history');
+                    return sections;
+                  })()
                 ).map((s) => (
                   <button
                     key={s}
@@ -393,111 +400,104 @@ export default function App() {
 
             {/* Content area */}
             <div className="w-full max-w-2xl mt-5">
-              <AnimatePresence mode="wait">
 
-                {/* ─── Search section content ─── */}
-                {section === 'search' && (
-                  <>
-                    {/* URL loading skeletons */}
-                    {view.type === 'fetching-song' && (
-                      <motion.div key="song-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <TrackSkeleton />
-                      </motion.div>
-                    )}
-                    {view.type === 'fetching-album' && (
-                      <motion.div key="album-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <AlbumSkeleton />
-                      </motion.div>
-                    )}
+              {/* ─── Search section content ─── */}
+              {section === 'search' && (
+                <AnimatePresence mode="wait">
+                  {/* URL loading skeletons */}
+                  {view.type === 'fetching-song' && (
+                    <motion.div key="song-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <TrackSkeleton />
+                    </motion.div>
+                  )}
+                  {view.type === 'fetching-album' && (
+                    <motion.div key="album-skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <AlbumSkeleton />
+                    </motion.div>
+                  )}
 
-                    {/* URL/generic error */}
-                    {view.type === 'error' && view.context === 'url' && (
-                      <FetchError key="url-error" message={view.message} />
-                    )}
+                  {/* URL/generic error */}
+                  {view.type === 'error' && view.context === 'url' && (
+                    <FetchError key="url-error" message={view.message} />
+                  )}
 
-                    {/* Song TrackCard */}
-                    {view.type === 'track' && (
-                      <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
-                        {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
-                        <TrackCard song={view.song} />
-                      </motion.div>
-                    )}
+                  {/* Song TrackCard */}
+                  {view.type === 'track' && (
+                    <motion.div key={`track-${view.song.id}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
+                      {view.fromSearch && <BackBtn onClick={goBack} label="Back to results" />}
+                      <TrackCard song={view.song} />
+                    </motion.div>
+                  )}
 
-                    {/* Album page */}
-                    {view.type === 'album' && (
-                      <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
-                      </motion.div>
-                    )}
+                  {/* Album page */}
+                  {view.type === 'album' && (
+                    <motion.div key={`album-${view.album.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <AlbumPage album={view.album} onBack={view.fromSearch ? goBack : undefined} />
+                    </motion.div>
+                  )}
 
-                    {/* Artist page */}
-                    {view.type === 'artist' && (
-                      <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
-                      </motion.div>
-                    )}
+                  {/* Artist page */}
+                  {view.type === 'artist' && (
+                    <motion.div key={`artist-${view.artist.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <ArtistPage artist={view.artist} onBack={view.fromSearch ? goBack : undefined} onAlbumSelect={handleArtistAlbumSelect} />
+                    </motion.div>
+                  )}
 
-                    {/* Song search results */}
-                    {showSongResults && (
-                      <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <SearchErrorBanner error={searchError} />
-                        <SearchResults
-                          results={view.type === 'song-results' || view.type === 'fetching-song-result' ? view.results : []}
-                          query={
-                            view.type === 'searching-songs' ? view.query
-                              : view.type === 'song-results' ? view.query
-                                : view.type === 'fetching-song-result' ? view.query
-                                  : ''
-                          }
-                          isSearching={view.type === 'searching-songs'}
-                          fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
-                          onSelect={handleSongResultSelect}
-                          error={view.type === 'error' && view.context === 'search' ? view.message : ''}
-                          downloadedTrackIds={downloadedTrackIds}
-                        />
-                      </motion.div>
-                    )}
+                  {/* Song search results */}
+                  {showSongResults && (
+                    <motion.div key="song-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <SearchErrorBanner error={searchError} />
+                      <SearchResults
+                        results={view.type === 'song-results' || view.type === 'fetching-song-result' ? view.results : []}
+                        query={
+                          view.type === 'searching-songs' ? view.query
+                            : view.type === 'song-results' ? view.query
+                              : view.type === 'fetching-song-result' ? view.query
+                                : ''
+                        }
+                        isSearching={view.type === 'searching-songs'}
+                        fetchingId={view.type === 'fetching-song-result' ? view.fetchingId : null}
+                        onSelect={handleSongResultSelect}
+                        error={view.type === 'error' && view.context === 'search' ? view.message : ''}
+                        downloadedTrackIds={downloadedTrackIds}
+                      />
+                    </motion.div>
+                  )}
 
-                    {/* Album search results */}
-                    {showAlbumResults && (
-                      <motion.div key="album-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <SearchErrorBanner error={searchError} />
-                        <AlbumResultsPanel
-                          view={view}
-                          onSelect={handleAlbumResultSelect}
-                          downloadedAlbumIds={downloadedAlbumIds}
-                        />
-                      </motion.div>
-                    )}
+                  {/* Album search results */}
+                  {showAlbumResults && (
+                    <motion.div key="album-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <SearchErrorBanner error={searchError} />
+                      <AlbumResultsPanel
+                        view={view}
+                        onSelect={handleAlbumResultSelect}
+                        downloadedAlbumIds={downloadedAlbumIds}
+                      />
+                    </motion.div>
+                  )}
 
-                    {/* Artist search results */}
-                    {showArtistResults && (
-                      <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <SearchErrorBanner error={searchError} />
-                        <ArtistResultsPanel
-                          view={view}
-                          onSelect={handleArtistResultSelect}
-                        />
-                      </motion.div>
-                    )}
-                  </>
-                )}
+                  {/* Artist search results */}
+                  {showArtistResults && (
+                    <motion.div key="artist-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <SearchErrorBanner error={searchError} />
+                      <ArtistResultsPanel
+                        view={view}
+                        onSelect={handleArtistResultSelect}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
 
-                {/* ─── Library section ─── */}
-                {section === 'library' && (
-                  <motion.div key="library-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <LibraryPage />
-                  </motion.div>
-                )}
+              {/* ─── Library section ─── */}
+              {section === 'library' && <LibraryPage />}
 
-                {/* ─── History section ─── */}
-                {section === 'history' && (
-                  <motion.div key="history-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <HistoryPage />
-                  </motion.div>
-                )}
+              {/* ─── Playlists section ─── */}
+              {section === 'playlists' && <PlaylistsPage musicPathEnabled={musicPathEnabled} />}
 
-              </AnimatePresence>
+              {/* ─── History section ─── */}
+              {section === 'history' && <HistoryPage />}
+
             </div>
 
             {/* Updates modal */}
