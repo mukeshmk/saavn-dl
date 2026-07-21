@@ -25,7 +25,7 @@ type Phase = 'idle' | 'working' | 'done' | 'error' | 'queued';
 
 // ─── Save to Library (single track) ──────────────────────────────────────────
 
-async function saveTrackToLibrary(blob: Blob, song: SaavnSong, filename: string): Promise<void> {
+async function saveTrackToLibrary(blob: Blob, song: SaavnSong, filename: string): Promise<string> {
   const album = song.more_info?.album || 'Unknown Album';
   const resp = await fetch('/api/library/save', {
     method: 'POST',
@@ -41,6 +41,9 @@ async function saveTrackToLibrary(blob: Blob, song: SaavnSong, filename: string)
     const data = await resp.json().catch(() => ({ error: 'Unknown server error' }));
     throw new Error(data.error || `Server responded with ${resp.status}`);
   }
+
+  const data = await resp.json();
+  return data.path || '';
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -111,6 +114,8 @@ export default function DownloadAction({
     setStage('Starting…');
 
     try {
+      let savedPath = '';
+
       if (resolvedAction === 'library') {
         // Download with metadata processing, then save to library
         if (embedMeta) {
@@ -123,7 +128,7 @@ export default function DownloadAction({
           setPercent(92);
           const artist = getArtistForFilename(song);
           const filename = (overrideFilename ?? `${song.title} - ${artist}`) + '.m4a';
-          await saveTrackToLibrary(blob, song, sanitizeFilenameLocal(filename));
+          savedPath = await saveTrackToLibrary(blob, song, sanitizeFilenameLocal(filename));
         } else {
           // Direct download blob → library
           setStage('Fetching audio…');
@@ -133,7 +138,7 @@ export default function DownloadAction({
           setPercent(80);
           const artist = getArtistForFilename(song);
           const filename = (overrideFilename ?? `${song.title} - ${artist}`) + '.m4a';
-          await saveTrackToLibrary(blob, song, sanitizeFilenameLocal(filename));
+          savedPath = await saveTrackToLibrary(blob, song, sanitizeFilenameLocal(filename));
         }
       } else {
         // Regular download to browser
@@ -170,6 +175,7 @@ export default function DownloadAction({
         quality,
         mode: resolvedAction === 'library' ? 'library' : embedMeta ? 'ffmpeg' : 'direct',
         songCount: 0,
+        filePath: savedPath || undefined,
       }).catch(() => { });
 
       setTimeout(() => setPhase('idle'), 3000);

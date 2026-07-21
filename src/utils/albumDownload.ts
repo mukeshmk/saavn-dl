@@ -16,6 +16,7 @@ export interface TrackStatus {
   status: 'pending' | 'downloading' | 'done' | 'failed' | 'skipped';
   error?: string;
   blob?: Blob;
+  filePath?: string;
 }
 
 export interface AlbumDownloadProgress {
@@ -428,7 +429,7 @@ export async function checkLibraryEnabled(): Promise<boolean> {
   }
 }
 
-async function saveToLibrary(blob: Blob, album: string, filename: string): Promise<void> {
+async function saveToLibrary(blob: Blob, album: string, filename: string): Promise<string> {
   const resp = await fetch('/api/library/save', {
     method: 'POST',
     headers: {
@@ -443,6 +444,9 @@ async function saveToLibrary(blob: Blob, album: string, filename: string): Promi
     const data = await resp.json().catch(() => ({ error: 'Unknown server error' }));
     throw new Error(data.error || `Server responded with ${resp.status}`);
   }
+
+  const data = await resp.json();
+  return data.path || '';
 }
 
 export async function downloadAlbumLibrary(
@@ -479,9 +483,9 @@ export async function downloadAlbumLibrary(
         const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
 
         emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 100));
-        await saveToLibrary(blob, albumFolder, filename);
+        const savedPath = await saveToLibrary(blob, albumFolder, filename);
 
-        tracks[i] = { ...tracks[i], status: 'done' };
+        tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
         resolved = true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';

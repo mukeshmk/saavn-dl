@@ -41,6 +41,7 @@ export interface HistoryEntry {
   year?: string;
   language?: string;
   isExplicit?: boolean;
+  filePath?: string;
   // Per-track data for album entries (sent on POST, not returned on GET list)
   tracks?: HistoryTrackEntry[];
 }

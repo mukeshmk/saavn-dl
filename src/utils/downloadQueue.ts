@@ -370,20 +370,25 @@ class DownloadQueueManager {
       });
     } else {
       // Build per-track data for the album
-      const tracks = (item.album.songs || []).map((song, idx) => ({
-        saavnId: song.id,
-        title: song.title,
-        artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '',
-        albumTitle: item.title,
-        albumArtist: item.albumArtistOverride || item.artist,
-        duration: song.more_info?.duration || '0',
-        playCount: song.play_count || '0',
-        year: song.year || item.album.year || '',
-        language: song.language || item.album.language || '',
-        trackNumber: idx + 1,
-        isExplicit: song.isExplicit || false,
-        image: song.image || item.album.image || '',
-      }));
+      const tracks = (item.album.songs || []).map((song, idx) => {
+        // Try to get filePath from track progress (set during library mode)
+        const trackProgress = item.trackProgress?.tracks?.[idx];
+        return {
+          saavnId: song.id,
+          title: song.title,
+          artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '',
+          albumTitle: item.title,
+          albumArtist: item.albumArtistOverride || item.artist,
+          duration: song.more_info?.duration || '0',
+          playCount: song.play_count || '0',
+          year: song.year || item.album.year || '',
+          language: song.language || item.album.language || '',
+          trackNumber: idx + 1,
+          isExplicit: song.isExplicit || false,
+          image: song.image || item.album.image || '',
+          filePath: trackProgress?.filePath || '',
+        };
+      });
 
       await recordDownload({
         saavnId: item.album.id,
