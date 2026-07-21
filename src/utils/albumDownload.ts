@@ -434,9 +434,9 @@ async function saveToLibrary(blob: Blob, artist: string, album: string, filename
     method: 'POST',
     headers: {
       'Content-Type': 'application/octet-stream',
-      'X-Artist': artist,
-      'X-Album': album,
-      'X-Filename': filename,
+      'X-Artist': encodeURIComponent(artist),
+      'X-Album': encodeURIComponent(album),
+      'X-Filename': encodeURIComponent(filename),
     },
     body: blob,
   });

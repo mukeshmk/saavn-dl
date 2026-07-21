@@ -458,12 +458,15 @@ export function searchTracks(query, limit = 20) {
  * Returns the string content (caller handles writing to disk).
  * Tracks without a file_path are skipped with a comment.
  */
-export function generateM3U8(playlistId) {
+export function generateM3U8(playlistId, musicPath = '') {
   const playlist = getPlaylist(playlistId);
   if (!playlist) return null;
 
   const tracks = getPlaylistTracks(playlistId);
   const lines = ['#EXTM3U', `#PLAYLIST:${playlist.name}`];
+
+  // Ensure musicPath ends with a trailing slash for clean concatenation
+  const prefix = musicPath ? (musicPath.endsWith('/') ? musicPath : musicPath + '/') : '';
 
   for (const track of tracks) {
     if (!track.filePath) {
@@ -475,8 +478,8 @@ export function generateM3U8(playlistId) {
     const display = `${track.artist} - ${track.title}`;
 
     lines.push(`#EXTINF:${duration},${display}`);
-    // Use relative path from the Playlists/ subdirectory to the music root
-    lines.push(`../${track.filePath}`);
+    // Use absolute path so Navidrome can resolve tracks reliably
+    lines.push(`${prefix}${track.filePath}`);
   }
 
   return { content: lines.join('\n') + '\n', name: playlist.name, trackCount: tracks.length };
@@ -486,12 +489,12 @@ export function generateM3U8(playlistId) {
  * Export all playlists as M3U8 files.
  * Returns an array of { name, content } for each playlist.
  */
-export function generateAllM3U8() {
+export function generateAllM3U8(musicPath = '') {
   const playlists = listPlaylists();
   const results = [];
 
   for (const playlist of playlists) {
-    const m3u8 = generateM3U8(playlist.id);
+    const m3u8 = generateM3U8(playlist.id, musicPath);
     if (m3u8) results.push(m3u8);
   }
 

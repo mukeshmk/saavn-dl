@@ -328,7 +328,7 @@ export async function sync() {
 
   // Auto-export playlists as .m3u8 to MUSIC_PATH/Playlists/
   try {
-    const allM3U8 = generateAllM3U8();
+    const allM3U8 = generateAllM3U8(MUSIC_PATH);
     if (allM3U8.length > 0) {
       const { writeFile } = await import('node:fs/promises');
       const playlistsDir = join(MUSIC_PATH, 'Playlists');
@@ -337,7 +337,7 @@ export async function sync() {
       }
       for (const m3u8 of allM3U8) {
         const safeName = m3u8.name.replace(/[\/\\:*?"<>|]/g, '_').trim().slice(0, 200);
-        const filePath = join(playlistsDir, `${safeName}.m3u8`);
+        const filePath = join(playlistsDir, `${safeName}.m3u`);
         await writeFile(filePath, m3u8.content, 'utf-8');
       }
       console.log(`[sync] Exported ${allM3U8.length} playlist(s) to ${playlistsDir}`);

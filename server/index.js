@@ -107,10 +107,10 @@ async function handleLibrarySave(req, res) {
     return jsonResponse(res, 403, { error: 'Library saving is not configured' });
   }
 
-  // Expect raw binary body with metadata in headers
-  const artist = req.headers['x-artist'] || '';
-  const album = req.headers['x-album'] || 'Unknown Album';
-  const filename = req.headers['x-filename'];
+  // Expect raw binary body with metadata in headers (URI-encoded for non-ASCII safety)
+  const artist = decodeURIComponent(req.headers['x-artist'] || '');
+  const album = decodeURIComponent(req.headers['x-album'] || 'Unknown Album');
+  const filename = decodeURIComponent(req.headers['x-filename'] || '');
 
   if (!filename) {
     return jsonResponse(res, 400, { error: 'Missing x-filename header' });

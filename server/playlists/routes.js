@@ -72,7 +72,8 @@ function sanitizeFilename(name) {
 }
 
 /**
- * Write a .m3u8 file to SAAVN_MUSIC_PATH/Playlists/
+ * Write a .m3u playlist file to SAAVN_MUSIC_PATH/Playlists/
+ * Uses .m3u extension for Navidrome auto-import compatibility.
  */
 async function writeM3U8ToDisk(name, content) {
   if (!MUSIC_PATH) {
@@ -84,7 +85,7 @@ async function writeM3U8ToDisk(name, content) {
     await mkdir(playlistsDir, { recursive: true });
   }
 
-  const filename = `${sanitizeFilename(name)}.m3u8`;
+  const filename = `${sanitizeFilename(name)}.m3u`;
   const filePath = join(playlistsDir, filename);
 
   // Path traversal protection
@@ -178,7 +179,7 @@ export async function handlePlaylistRoute(req, res, url, jsonResponse) {
         return jsonResponse(res, 403, { error: 'SAAVN_MUSIC_PATH is not configured' });
       }
 
-      const allM3U8 = generateAllM3U8();
+      const allM3U8 = generateAllM3U8(MUSIC_PATH);
       const exported = [];
 
       for (const m3u8 of allM3U8) {
@@ -379,7 +380,7 @@ export async function handlePlaylistRoute(req, res, url, jsonResponse) {
       }
 
       const id = decodeURIComponent(exportMatch[1]);
-      const m3u8 = generateM3U8(id);
+      const m3u8 = generateM3U8(id, MUSIC_PATH);
 
       if (!m3u8) {
         return jsonResponse(res, 404, { error: 'Playlist not found' });
