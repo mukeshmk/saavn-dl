@@ -14,7 +14,7 @@ import { createServer } from 'node:http';
 import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
 import { join, extname, resolve, normalize } from 'node:path';
 import { existsSync } from 'node:fs';
-import { initDb } from './db/index.js';
+import { initDb, getDb } from './db/index.js';
 import { handleLibraryRoute } from './library/routes.js';
 import { handleHistoryRoute } from './history/routes.js';
 import { handlePlaylistRoute } from './playlists/routes.js';
@@ -160,6 +160,121 @@ async function handleLibrarySave(req, res) {
   }
 }
 
+/**
+ * POST /api/library/check-tracks
+ * Body: { saavnIds: string[] }
+ * Returns: { existing: { [saavnId]: { filePath: string, exists: boolean } } }
+ *
+ * Checks which tracks already exist in the library (by saavn_id in the DB + file on disk).
+ */
+async function handleLibraryCheckTracks(req, res) {
+  if (!LIBRARY_PATH) {
+    return jsonResponse(res, 403, { error: 'Library saving is not configured' });
+  }
+
+  try {
+    const body = await parseJsonBody(req);
+    const saavnIds = body?.saavnIds;
+    if (!Array.isArray(saavnIds) || saavnIds.length === 0) {
+      return jsonResponse(res, 400, { error: 'saavnIds array required' });
+    }
+
+    const db = getDb();
+
+    // Look up existing tracks by saavn_id
+    const placeholders = saavnIds.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT saavn_id, file_path FROM tracks WHERE saavn_id IN (${placeholders})`).all(...saavnIds);
+
+    const existing = {};
+    for (const row of rows) {
+      if (row.file_path) {
+        // Check if file actually exists on disk
+        const fullPath = join(LIBRARY_PATH, row.file_path);
+        const fileExists = existsSync(fullPath);
+        existing[row.saavn_id] = { filePath: row.file_path, exists: fileExists };
+      }
+    }
+
+    jsonResponse(res, 200, { existing });
+  } catch (err) {
+    console.error('[library/check-tracks] Error:', err.message);
+    jsonResponse(res, 500, { error: err.message });
+  }
+}
+
+/**
+ * POST /api/library/playlist
+ * Body: { name: string, tracks: { title: string, artist: string, duration: number, filePath: string }[] }
+ * Returns: { success: true, path: string }
+ *
+ * Creates an m3u playlist file in the library root from an ordered list of track file paths.
+ */
+async function handleLibraryPlaylist(req, res) {
+  if (!LIBRARY_PATH) {
+    return jsonResponse(res, 403, { error: 'Library saving is not configured' });
+  }
+
+  try {
+    const body = await parseJsonBody(req);
+    const { name, tracks } = body || {};
+
+    if (!name || !Array.isArray(tracks) || tracks.length === 0) {
+      return jsonResponse(res, 400, { error: 'name and tracks array required' });
+    }
+
+    // Build extended m3u content
+    let m3u = '#EXTM3U\n';
+    m3u += `#PLAYLIST:${name}\n`;
+
+    for (const track of tracks) {
+      const duration = Math.round(track.duration || 0);
+      const display = track.artist ? `${track.artist} - ${track.title}` : track.title;
+      m3u += `#EXTINF:${duration},${display}\n`;
+      m3u += `${track.filePath}\n`;
+    }
+
+    // Write to Playlists/ directory in the library root
+    const playlistDir = join(LIBRARY_PATH, 'Playlists');
+    await mkdir(playlistDir, { recursive: true });
+
+    const safeName = sanitizePathSegment(name);
+    const playlistPath = join(playlistDir, `${safeName}.m3u`);
+
+    // Prevent path traversal
+    const resolvedPath = resolve(playlistPath);
+    if (!resolvedPath.startsWith(resolve(LIBRARY_PATH))) {
+      return jsonResponse(res, 400, { error: 'Invalid playlist name' });
+    }
+
+    await writeFile(playlistPath, m3u, 'utf-8');
+
+    const relativePath = `Playlists/${safeName}.m3u`;
+    jsonResponse(res, 200, { success: true, path: relativePath });
+  } catch (err) {
+    console.error('[library/playlist] Error:', err.message);
+    jsonResponse(res, 500, { error: err.message });
+  }
+}
+
+/**
+ * Parse a JSON body from a request.
+ */
+function parseJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      try {
+        const str = Buffer.concat(chunks).toString('utf-8');
+        resolve(JSON.parse(str));
+      } catch (err) {
+        reject(new Error('Invalid JSON body'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 // ─── Static File Serving ──────────────────────────────────────────────────────
 
 async function serveStatic(req, res) {
@@ -228,8 +343,14 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/library/save' && req.method === 'POST') {
       return await handleLibrarySave(req, res);
     }
-    // Library sync routes (/api/library/* except /save)
-    if (url.pathname.startsWith('/api/library/') && url.pathname !== '/api/library/save') {
+    if (url.pathname === '/api/library/check-tracks' && req.method === 'POST') {
+      return await handleLibraryCheckTracks(req, res);
+    }
+    if (url.pathname === '/api/library/playlist' && req.method === 'POST') {
+      return await handleLibraryPlaylist(req, res);
+    }
+    // Library sync routes (/api/library/* except /save and new endpoints)
+    if (url.pathname.startsWith('/api/library/') && url.pathname !== '/api/library/save' && url.pathname !== '/api/library/check-tracks' && url.pathname !== '/api/library/playlist') {
       const handled = await handleLibraryRoute(req, res, url, jsonResponse);
       if (handled !== false) return;
     }

@@ -15,7 +15,7 @@ interface DownloadQueueContextValue {
   queuedCount: number;
   totalPending: number;
   addTrack: (song: SaavnSong, quality: Quality, overrideMeta?: TrackMetadata, overrideFilename?: string) => void;
-  addAlbum: (album: AlbumDetail, quality: Quality, mode: AlbumDownloadMode, albumArtistOverride?: string) => void;
+  addAlbum: (album: AlbumDetail, quality: Quality, mode: AlbumDownloadMode, albumArtistOverride?: string, isPlaylist?: boolean) => void;
   removeItem: (id: string) => void;
   retryItem: (id: string) => void;
   cancelCurrent: () => void;
@@ -46,8 +46,8 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
   );
 
   const addAlbum = useCallback(
-    (album: AlbumDetail, quality: Quality, mode: AlbumDownloadMode, albumArtistOverride?: string) => {
-      downloadQueue.addAlbum(album, quality, mode, albumArtistOverride);
+    (album: AlbumDetail, quality: Quality, mode: AlbumDownloadMode, albumArtistOverride?: string, isPlaylist?: boolean) => {
+      downloadQueue.addAlbum(album, quality, mode, albumArtistOverride, isPlaylist);
     },
     [],
   );

@@ -243,6 +243,12 @@ function addAlbumEntry(db, entry) {
         const track = entry.tracks[i];
         const trackId = `track-${track.saavnId}-${Date.now()}-${i}`;
 
+        // If skipIfExists is set (playlist mode), don't overwrite existing track entries
+        if (track.skipIfExists) {
+          const existingTrack = db.prepare('SELECT id FROM tracks WHERE saavn_id = ?').get(track.saavnId);
+          if (existingTrack) continue;
+        }
+
         upsertTrack.run(
           trackId,
           track.saavnId,

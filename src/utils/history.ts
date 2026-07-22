@@ -21,6 +21,7 @@ export interface HistoryTrackEntry {
   filePath?: string;
   isExplicit: boolean;
   image: string;
+  skipIfExists?: boolean;
 }
 
 export interface HistoryEntry {

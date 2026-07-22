@@ -516,3 +516,165 @@ export async function downloadAlbumLibrary(
 
   onProgress({ current: songs.length, total: songs.length, currentTitle: '', stage: 'Done!', percent: 100, tracks: [...tracks] });
 }
+
+// ─── Playlist Library mode ────────────────────────────────────────────────────
+// Unlike album library mode, this uses each track's own Artist/Album for folder structure,
+// skips already-downloaded tracks, and generates an m3u playlist file.
+
+interface ExistingTrackInfo {
+  filePath: string;
+  exists: boolean;
+}
+
+interface CheckTracksResponse {
+  existing: Record<string, ExistingTrackInfo>;
+}
+
+/**
+ * Check which tracks already exist in the library.
+ */
+async function checkExistingTracks(saavnIds: string[]): Promise<Record<string, ExistingTrackInfo>> {
+  try {
+    const resp = await fetch('/api/library/check-tracks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saavnIds }),
+    });
+    if (resp.ok) {
+      const data: CheckTracksResponse = await resp.json();
+      return data.existing || {};
+    }
+  } catch {
+    // Fall through — treat all as missing
+  }
+  return {};
+}
+
+/**
+ * Create an m3u playlist file in the library.
+ */
+async function createPlaylistFile(name: string, tracks: { title: string; artist: string; duration: number; filePath: string }[]): Promise<string> {
+  const resp = await fetch('/api/library/playlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, tracks }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(data.error || `Playlist creation failed: ${resp.status}`);
+  }
+  const data = await resp.json();
+  return data.path || '';
+}
+
+/**
+ * Download a playlist to library with per-track Artist/Album folder structure.
+ * Skips tracks that already exist in the library and generates an m3u file.
+ */
+export async function downloadPlaylistLibrary(
+  album: AlbumDetail,
+  quality: string,
+  onProgress: ProgressCallback,
+  onFailure: FailureCallback,
+  _albumArtistOverride?: string,
+): Promise<void> {
+  const songs = album.songs;
+  const tracks: TrackStatus[] = songs.map(s => ({ id: s.id, title: s.title, status: 'pending' as const }));
+
+  const emit = (i: number, stage: string, pct: number) =>
+    onProgress({ current: i + 1, total: songs.length, currentTitle: songs[i]?.title ?? '', stage, percent: pct, tracks: [...tracks] });
+
+  // Phase 1: Check which tracks already exist in the library
+  emit(0, 'Checking existing tracks…', 0);
+  const saavnIds = songs.map(s => s.id);
+  const existingMap = await checkExistingTracks(saavnIds);
+
+  // Collect all track paths (existing + newly downloaded) for the m3u
+  const playlistTracks: { title: string; artist: string; duration: number; filePath: string }[] = [];
+
+  // Phase 2: Download missing tracks, skip existing ones
+  for (let i = 0; i < songs.length; i++) {
+    const song = songs[i];
+    const existingInfo = existingMap[song.id];
+
+    // If track already exists on disk, skip download and use existing path
+    if (existingInfo?.exists && existingInfo.filePath) {
+      tracks[i] = { ...tracks[i], status: 'done', filePath: existingInfo.filePath };
+      playlistTracks.push({
+        title: song.title,
+        artist: getArtistT(song),
+        duration: parseInt(song.more_info?.duration || '0', 10),
+        filePath: existingInfo.filePath,
+      });
+      emit(i, 'Already in library ✓', Math.round(((i + 1) / songs.length) * 95));
+      continue;
+    }
+
+    tracks[i] = { ...tracks[i], status: 'downloading' };
+    emit(i, 'Starting…', Math.round((i / songs.length) * 95));
+
+    let attempt = 0;
+    let resolved = false;
+
+    while (!resolved && attempt < 2) {
+      try {
+        // No album artist override for playlists — each track keeps its own artist
+        const blob = await trackToBlob(songs[i], quality, (stage, p) => {
+          tracks[i] = { ...tracks[i], status: 'downloading' };
+          emit(i, stage, Math.round(((i + p / 100) / songs.length) * 95));
+        }, undefined);
+
+        // Use per-track artist and album for folder structure
+        const artistName = getArtistT(song);
+        const trackAlbum = song.more_info?.album || album.title;
+        const trackYear = song.year || '';
+        const albumFolder = `${sanitizeFilename(trackAlbum)}${trackYear ? ` (${trackYear})` : ''}`;
+        const filename = `${sanitizeFilename(song.title)} - ${sanitizeFilename(artistName)}.m4a`;
+
+        emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 95));
+        const savedPath = await saveToLibrary(blob, artistName, albumFolder, filename);
+
+        tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
+        playlistTracks.push({
+          title: song.title,
+          artist: artistName,
+          duration: parseInt(song.more_info?.duration || '0', 10),
+          filePath: savedPath,
+        });
+        resolved = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        if (attempt === 0) {
+          const action = await onFailure(i, songs[i], msg);
+          if (action === 'skip') {
+            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
+            resolved = true;
+          } else {
+            attempt++;
+          }
+        } else {
+          const action = await onFailure(i, songs[i], msg);
+          if (action === 'skip') {
+            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
+          } else {
+            tracks[i] = { ...tracks[i], status: 'failed', error: msg };
+          }
+          resolved = true;
+        }
+      }
+    }
+  }
+
+  // Phase 3: Generate m3u playlist file
+  if (playlistTracks.length > 0) {
+    emit(songs.length - 1, 'Creating playlist file…', 96);
+    try {
+      await createPlaylistFile(album.title, playlistTracks);
+    } catch (err) {
+      console.error('Failed to create playlist file:', err);
+      // Non-fatal — tracks were still saved
+    }
+  }
+
+  onProgress({ current: songs.length, total: songs.length, currentTitle: '', stage: 'Done!', percent: 100, tracks: [...tracks] });
+}

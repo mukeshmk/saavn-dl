@@ -1,7 +1,7 @@
 import type { SaavnSong, AlbumDetail, Quality } from '../types/saavn';
 import type { TrackMetadata } from '../types/metadata';
 import { downloadWithMetadata } from './download';
-import { downloadAlbumIndividual, downloadAlbumZip, downloadAlbumLibrary, detectMultiArtist } from './albumDownload';
+import { downloadAlbumIndividual, downloadAlbumZip, downloadAlbumLibrary, downloadPlaylistLibrary, detectMultiArtist } from './albumDownload';
 import type { AlbumDownloadMode, AlbumDownloadProgress } from './albumDownload';
 import { recordDownload } from './history';
 
@@ -42,6 +42,7 @@ export interface QueueAlbumItem {
   quality: Quality;
   mode: AlbumDownloadMode;
   albumArtistOverride?: string;
+  isPlaylist?: boolean;
   trackProgress?: AlbumDownloadProgress;
 }
 
@@ -121,6 +122,7 @@ class DownloadQueueManager {
     quality: Quality,
     mode: AlbumDownloadMode,
     albumArtistOverride?: string,
+    isPlaylist?: boolean,
   ): void {
     const artist =
       album.artists?.primary?.map((a) => a.name).join(', ') || album.subtitle || 'Unknown Artist';
@@ -139,6 +141,7 @@ class DownloadQueueManager {
       quality,
       mode,
       albumArtistOverride,
+      isPlaylist,
     };
 
     this.items.push(item);
@@ -329,6 +332,14 @@ class DownloadQueueManager {
     // Auto-skip failures in background mode (no interactive prompt)
     const onFailure = async (): Promise<'skip' | 'retry'> => 'retry';
 
+    // For playlists in library mode, use the playlist-specific downloader
+    // that uses per-track Artist/Album structure, skips existing tracks,
+    // and generates an m3u playlist file.
+    if (item.isPlaylist && item.mode === 'library') {
+      await downloadPlaylistLibrary(item.album, item.quality, onProgress, onFailure);
+      return;
+    }
+
     // Navidrome fix: if no override was provided, auto-detect multi-artist albums
     // and apply a unified Album Artist tag so they don't get split
     let albumArtist = item.albumArtistOverride;
@@ -370,15 +381,19 @@ class DownloadQueueManager {
       });
     } else {
       // Build per-track data for the album
-      const tracks = (item.album.songs || []).map((song, idx) => {
+      // For playlists, only include tracks that were actually downloaded (not skipped as existing)
+      const songs = item.album.songs || [];
+      const tracks = songs.map((song, idx) => {
         // Try to get filePath from track progress (set during library mode)
         const trackProgress = item.trackProgress?.tracks?.[idx];
         return {
           saavnId: song.id,
           title: song.title,
           artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '',
-          albumTitle: item.title,
-          albumArtist: item.albumArtistOverride || item.artist,
+          albumTitle: item.isPlaylist ? (song.more_info?.album || item.title) : item.title,
+          albumArtist: item.isPlaylist
+            ? (song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '')
+            : (item.albumArtistOverride || item.artist),
           duration: song.more_info?.duration || '0',
           playCount: song.play_count || '0',
           year: song.year || item.album.year || '',
@@ -387,6 +402,7 @@ class DownloadQueueManager {
           isExplicit: song.isExplicit || false,
           image: song.image || item.album.image || '',
           filePath: trackProgress?.filePath || '',
+          skipIfExists: item.isPlaylist || false,
         };
       });
 

@@ -205,7 +205,7 @@ export default function PlaylistPage({ playlist, onBack, downloadedTrackIds }: P
       {/* Download modal — reuses AlbumDownloadModal by converting playlist to album shape */}
       <AnimatePresence>
         {showModal && (
-          <AlbumDownloadModal album={playlistAsAlbum(playlist)} onClose={() => setShowModal(false)} />
+          <AlbumDownloadModal album={playlistAsAlbum(playlist)} onClose={() => setShowModal(false)} isPlaylist />
         )}
       </AnimatePresence>
     </>

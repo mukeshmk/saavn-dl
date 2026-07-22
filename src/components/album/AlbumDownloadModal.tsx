@@ -11,6 +11,7 @@ import {
   downloadAlbumIndividual,
   downloadAlbumZip,
   downloadAlbumLibrary,
+  downloadPlaylistLibrary,
   estimateAlbumSizeMB,
   detectMultiArtist,
 } from '../../utils/albumDownload';
@@ -31,9 +32,10 @@ interface PendingFailure {
 interface Props {
   album: AlbumDetail;
   onClose: () => void;
+  isPlaylist?: boolean;
 }
 
-export default function AlbumDownloadModal({ album, onClose }: Props) {
+export default function AlbumDownloadModal({ album, onClose, isPlaylist }: Props) {
   const [phase, setPhase] = useState<ModalPhase>('config');
   const [quality, setQuality] = useState<Quality>('320');
   const [progress, setProgress] = useState<AlbumDownloadProgress | null>(null);
@@ -72,7 +74,7 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
     const override = multiArtistInfo.isMultiArtist
       ? (albumArtistOverride !== null ? (albumArtistOverride || undefined) : albumArtistInput.trim() || 'Various Artists')
       : undefined;
-    addAlbum(album, quality, mode, override);
+    addAlbum(album, quality, mode, override, isPlaylist);
     onClose();
   };
 
@@ -96,7 +98,11 @@ export default function AlbumDownloadModal({ album, onClose }: Props) {
       if (mode === 'zip') {
         await downloadAlbumZip(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
       } else if (mode === 'library') {
-        await downloadAlbumLibrary(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
+        if (isPlaylist) {
+          await downloadPlaylistLibrary(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
+        } else {
+          await downloadAlbumLibrary(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
+        }
       } else {
         await downloadAlbumIndividual(album, quality, onProg, onFail, albumArtistOverride ?? undefined);
       }
