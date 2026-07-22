@@ -4,6 +4,7 @@ import { sanitizeFilename } from './decrypt';
 import { getFFmpeg } from './download';
 import { decryptMediaUrl, getQualityUrl } from './decrypt';
 import { proxyFetch } from './proxy';
+import { recordDownload } from './history';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -538,6 +539,26 @@ export async function downloadAlbumLibrary(
         const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
 
         tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
+
+        // Record to history so the track exists in the DB for playlist linking
+        recordDownload({
+          saavnId: song.id,
+          type: 'track',
+          title: song.title,
+          artist: artistName,
+          album: album.title,
+          image: song.image || '',
+          quality,
+          mode: 'library',
+          songCount: 0,
+          duration: song.more_info?.duration || '0',
+          playCount: song.play_count || '0',
+          year: song.year || album.year || '',
+          language: song.language || album.language || '',
+          isExplicit: song.isExplicit || false,
+          filePath: savedPath,
+        }).catch(() => { /* best-effort */ });
+
         resolved = true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -745,6 +766,26 @@ export async function downloadPlaylistLibrary(
           duration: parseInt(song.more_info?.duration || '0', 10),
           filePath: savedPath,
         });
+
+        // Record to history so the track exists in the DB before playlist linking
+        recordDownload({
+          saavnId: song.id,
+          type: 'track',
+          title: song.title,
+          artist: artistName,
+          album: trackAlbum,
+          image: song.image || '',
+          quality,
+          mode: 'library',
+          songCount: 0,
+          duration: song.more_info?.duration || '0',
+          playCount: song.play_count || '0',
+          year: song.year || trackYear,
+          language: song.language || '',
+          isExplicit: song.isExplicit || false,
+          filePath: savedPath,
+        }).catch(() => { /* best-effort */ });
+
         resolved = true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
