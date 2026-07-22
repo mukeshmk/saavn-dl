@@ -25,6 +25,23 @@ type Phase = 'idle' | 'working' | 'done' | 'error' | 'queued';
 
 // ─── Save to Library (single track) ──────────────────────────────────────────
 
+async function checkTrackExists(saavnId: string): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/library/check-tracks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saavnIds: [saavnId] }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.existing?.[saavnId]?.exists === true;
+    }
+  } catch {
+    // Fall through
+  }
+  return false;
+}
+
 async function saveTrackToLibrary(blob: Blob, song: SaavnSong, filename: string): Promise<string> {
   const album = song.more_info?.album || 'Unknown Album';
   const artist = song.more_info?.artists?.primary?.[0]?.name || 'Unknown Artist';
@@ -119,6 +136,16 @@ export default function DownloadAction({
       let savedPath = '';
 
       if (resolvedAction === 'library') {
+        // Check if track already exists in library — skip if so
+        const alreadyExists = await checkTrackExists(song.id);
+        if (alreadyExists) {
+          setStage('Already in library ✓');
+          setPercent(100);
+          setPhase('done');
+          setTimeout(() => setPhase('idle'), 2500);
+          return;
+        }
+
         // Download with metadata processing, then save to library
         if (embedMeta) {
           // We need the blob, not a browser download

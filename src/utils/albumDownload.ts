@@ -450,6 +450,39 @@ async function saveToLibrary(blob: Blob, artist: string, album: string, filename
   return data.path || '';
 }
 
+// ─── Check existing tracks (shared by album + playlist library modes) ─────────
+
+interface ExistingTrackInfo {
+  filePath: string;
+  exists: boolean;
+}
+
+interface CheckTracksResponse {
+  existing: Record<string, ExistingTrackInfo>;
+}
+
+/**
+ * Check which tracks already exist in the library (checks both staging and music paths).
+ */
+async function checkExistingTracks(saavnIds: string[]): Promise<Record<string, ExistingTrackInfo>> {
+  try {
+    const resp = await fetch('/api/library/check-tracks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saavnIds }),
+    });
+    if (resp.ok) {
+      const data: CheckTracksResponse = await resp.json();
+      return data.existing || {};
+    }
+  } catch {
+    // Fall through — treat all as missing
+  }
+  return {};
+}
+
+// ─── Album Library mode ───────────────────────────────────────────────────────
+
 export async function downloadAlbumLibrary(
   album: AlbumDetail,
   quality: string,
@@ -465,7 +498,22 @@ export async function downloadAlbumLibrary(
   const emit = (i: number, stage: string, pct: number) =>
     onProgress({ current: i + 1, total: songs.length, currentTitle: songs[i]?.title ?? '', stage, percent: pct, tracks: [...tracks] });
 
+  // Check which tracks already exist in the library
+  emit(0, 'Checking existing tracks…', 0);
+  const saavnIds = songs.map(s => s.id);
+  const existingMap = await checkExistingTracks(saavnIds);
+
   for (let i = 0; i < songs.length; i++) {
+    const song = songs[i];
+    const existingInfo = existingMap[song.id];
+
+    // Skip tracks that already exist on disk
+    if (existingInfo?.exists && existingInfo.filePath) {
+      tracks[i] = { ...tracks[i], status: 'done', filePath: existingInfo.filePath };
+      emit(i, 'Already in library ✓', Math.round(((i + 1) / songs.length) * 100));
+      continue;
+    }
+
     tracks[i] = { ...tracks[i], status: 'downloading' };
     emit(i, 'Starting…', Math.round((i / songs.length) * 100));
 
@@ -521,39 +569,10 @@ export async function downloadAlbumLibrary(
 // Unlike album library mode, this uses each track's own Artist/Album for folder structure,
 // skips already-downloaded tracks, and generates an m3u playlist file.
 
-interface ExistingTrackInfo {
-  filePath: string;
-  exists: boolean;
-}
-
-interface CheckTracksResponse {
-  existing: Record<string, ExistingTrackInfo>;
-}
-
-/**
- * Check which tracks already exist in the library.
- */
-async function checkExistingTracks(saavnIds: string[]): Promise<Record<string, ExistingTrackInfo>> {
-  try {
-    const resp = await fetch('/api/library/check-tracks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ saavnIds }),
-    });
-    if (resp.ok) {
-      const data: CheckTracksResponse = await resp.json();
-      return data.existing || {};
-    }
-  } catch {
-    // Fall through — treat all as missing
-  }
-  return {};
-}
-
 /**
  * Create an m3u playlist file in the library.
  */
-async function createPlaylistFile(name: string, tracks: { title: string; artist: string; duration: number; filePath: string }[]): Promise<string> {
+async function createPlaylistFile(name: string, tracks: { saavnId: string; title: string; artist: string; duration: number; filePath: string }[]): Promise<string> {
   const resp = await fetch('/api/library/playlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -567,8 +586,81 @@ async function createPlaylistFile(name: string, tracks: { title: string; artist:
   return data.path || '';
 }
 
+// ─── Album artist resolution for playlist tracks ──────────────────────────────
+
+interface AlbumArtistInfo {
+  albumArtist: string;
+  year: string;
+}
+
+const DETAIL_API = 'https://sda.rhythmax.workers.dev/album';
+
+/**
+ * Fetches album details for each unique album_id in the playlist to resolve
+ * the correct album artist. This ensures tracks land in the same folder as
+ * when downloading the full album (Navidrome compatibility).
+ *
+ * Returns a Map of album_id → { albumArtist, year }
+ */
+async function resolveAlbumArtists(songs: SaavnSong[]): Promise<Map<string, AlbumArtistInfo>> {
+  const map = new Map<string, AlbumArtistInfo>();
+
+  // Collect unique album URLs keyed by album_id
+  const albumUrls = new Map<string, string>();
+  for (const song of songs) {
+    const albumId = song.more_info?.album_id;
+    const albumUrl = song.more_info?.album_url;
+    if (albumId && albumUrl && !albumUrls.has(albumId)) {
+      albumUrls.set(albumId, albumUrl);
+    }
+  }
+
+  // Fetch album details in parallel (batches of 5 to avoid hammering the API)
+  const entries = [...albumUrls.entries()];
+  const BATCH_SIZE = 5;
+
+  for (let batch = 0; batch < entries.length; batch += BATCH_SIZE) {
+    const chunk = entries.slice(batch, batch + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      chunk.map(async ([albumId, albumUrl]) => {
+        try {
+          const res = await proxyFetch(`${DETAIL_API}?url=${encodeURIComponent(albumUrl)}`);
+          if (!res.ok) return null;
+          const detail: AlbumDetail = await res.json();
+          if (!detail?.id) return null;
+
+          // Determine album artist using the same logic as downloadAlbumLibrary
+          let albumArtist: string;
+          if (detail.artists?.primary?.length === 1) {
+            albumArtist = detail.artists.primary[0].name;
+          } else if (detail.artists?.primary?.length > 1) {
+            albumArtist = detail.artists.primary.map(a => a.name).join(', ');
+          } else {
+            albumArtist = detail.subtitle?.split(' - ')[0]?.trim() || '';
+          }
+
+          return { albumId, albumArtist, year: detail.year || '' };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        const { albumId, albumArtist, year } = result.value;
+        map.set(albumId, { albumArtist, year });
+      }
+    }
+  }
+
+  return map;
+}
+
 /**
  * Download a playlist to library with per-track Artist/Album folder structure.
+ * Fetches album details for each unique album to get the correct album artist
+ * (avoids the Navidrome split-album problem).
  * Skips tracks that already exist in the library and generates an m3u file.
  */
 export async function downloadPlaylistLibrary(
@@ -589,10 +681,14 @@ export async function downloadPlaylistLibrary(
   const saavnIds = songs.map(s => s.id);
   const existingMap = await checkExistingTracks(saavnIds);
 
-  // Collect all track paths (existing + newly downloaded) for the m3u
-  const playlistTracks: { title: string; artist: string; duration: number; filePath: string }[] = [];
+  // Phase 2: Fetch album details for unique albums to get correct album artists
+  emit(0, 'Resolving album artists…', 1);
+  const albumArtistMap = await resolveAlbumArtists(songs);
 
-  // Phase 2: Download missing tracks, skip existing ones
+  // Collect all track paths (existing + newly downloaded) for the m3u
+  const playlistTracks: { saavnId: string; title: string; artist: string; duration: number; filePath: string }[] = [];
+
+  // Phase 3: Download missing tracks, skip existing ones
   for (let i = 0; i < songs.length; i++) {
     const song = songs[i];
     const existingInfo = existingMap[song.id];
@@ -601,6 +697,7 @@ export async function downloadPlaylistLibrary(
     if (existingInfo?.exists && existingInfo.filePath) {
       tracks[i] = { ...tracks[i], status: 'done', filePath: existingInfo.filePath };
       playlistTracks.push({
+        saavnId: song.id,
         title: song.title,
         artist: getArtistT(song),
         duration: parseInt(song.more_info?.duration || '0', 10),
@@ -618,24 +715,31 @@ export async function downloadPlaylistLibrary(
 
     while (!resolved && attempt < 2) {
       try {
-        // No album artist override for playlists — each track keeps its own artist
+        // Get the album artist for this track's album (from fetched album details)
+        const albumId = song.more_info?.album_id || '';
+        const albumInfo = albumArtistMap.get(albumId);
+        const folderArtist = albumInfo?.albumArtist || getArtistT(song);
+        const albumArtistOverride = albumInfo?.albumArtist || undefined;
+
+        // Embed with the correct album artist tag
         const blob = await trackToBlob(songs[i], quality, (stage, p) => {
           tracks[i] = { ...tracks[i], status: 'downloading' };
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 95));
-        }, undefined);
+        }, albumArtistOverride);
 
-        // Use per-track artist and album for folder structure
-        const artistName = getArtistT(song);
+        // Use album artist for folder, track's own album name for subfolder
         const trackAlbum = song.more_info?.album || album.title;
-        const trackYear = song.year || '';
+        const trackYear = song.year || albumInfo?.year || '';
         const albumFolder = `${sanitizeFilename(trackAlbum)}${trackYear ? ` (${trackYear})` : ''}`;
+        const artistName = getArtistT(song);
         const filename = `${sanitizeFilename(song.title)} - ${sanitizeFilename(artistName)}.m4a`;
 
         emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 95));
-        const savedPath = await saveToLibrary(blob, artistName, albumFolder, filename);
+        const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
 
         tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
         playlistTracks.push({
+          saavnId: song.id,
           title: song.title,
           artist: artistName,
           duration: parseInt(song.more_info?.duration || '0', 10),
@@ -665,7 +769,7 @@ export async function downloadPlaylistLibrary(
     }
   }
 
-  // Phase 3: Generate m3u playlist file
+  // Phase 4: Generate m3u playlist file
   if (playlistTracks.length > 0) {
     emit(songs.length - 1, 'Creating playlist file…', 96);
     try {

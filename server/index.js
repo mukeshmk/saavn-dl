@@ -188,9 +188,10 @@ async function handleLibraryCheckTracks(req, res) {
     const existing = {};
     for (const row of rows) {
       if (row.file_path) {
-        // Check if file actually exists on disk
-        const fullPath = join(LIBRARY_PATH, row.file_path);
-        const fileExists = existsSync(fullPath);
+        // Check if file exists on disk — try both library (staging) and music (final) paths
+        const libraryFullPath = join(LIBRARY_PATH, row.file_path);
+        const musicFullPath = MUSIC_PATH ? join(MUSIC_PATH, row.file_path) : '';
+        const fileExists = existsSync(libraryFullPath) || (musicFullPath && existsSync(musicFullPath));
         existing[row.saavn_id] = { filePath: row.file_path, exists: fileExists };
       }
     }
@@ -204,10 +205,12 @@ async function handleLibraryCheckTracks(req, res) {
 
 /**
  * POST /api/library/playlist
- * Body: { name: string, tracks: { title: string, artist: string, duration: number, filePath: string }[] }
- * Returns: { success: true, path: string }
+ * Body: { name: string, tracks: { saavnId: string, title: string, artist: string, duration: number, filePath: string }[] }
+ * Returns: { success: true, playlistId: string, path: string }
  *
- * Creates an m3u playlist file in the library root from an ordered list of track file paths.
+ * Creates a playlist entry in the database and generates an m3u file.
+ * The m3u uses SAAVN_MUSIC_PATH-prefixed absolute paths so it works after sync.
+ * Also links tracks to the playlist in playlist_tracks table.
  */
 async function handleLibraryPlaylist(req, res) {
   if (!LIBRARY_PATH) {
@@ -222,7 +225,49 @@ async function handleLibraryPlaylist(req, res) {
       return jsonResponse(res, 400, { error: 'name and tracks array required' });
     }
 
-    // Build extended m3u content
+    const db = getDb();
+    const { randomUUID } = await import('node:crypto');
+
+    // Create or get the playlist entry in the DB
+    let playlist = db.prepare('SELECT id FROM playlists WHERE name = ?').get(name);
+    const now = new Date().toISOString();
+
+    if (!playlist) {
+      const playlistId = randomUUID();
+      db.prepare(`
+        INSERT INTO playlists (id, name, description, auto_generate, auto_criteria, created_at, updated_at)
+        VALUES (?, ?, ?, 0, '', ?, ?)
+      `).run(playlistId, name, `Downloaded from JioSaavn`, now, now);
+      playlist = { id: playlistId };
+    } else {
+      // Update timestamp
+      db.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').run(now, playlist.id);
+      // Clear existing track links (rebuild from scratch)
+      db.prepare('DELETE FROM playlist_tracks WHERE playlist_id = ?').run(playlist.id);
+    }
+
+    // Link tracks to the playlist by saavn_id
+    const findTrack = db.prepare('SELECT id FROM tracks WHERE saavn_id = ?');
+    const insertLink = db.prepare(`
+      INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    const linkAll = db.transaction(() => {
+      for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        if (!track.saavnId) continue;
+        const dbTrack = findTrack.get(track.saavnId);
+        if (dbTrack) {
+          insertLink.run(playlist.id, dbTrack.id, i, now);
+        }
+      }
+    });
+    linkAll();
+
+    // Build m3u with absolute paths (using MUSIC_PATH where files end up after sync)
+    const musicPrefix = MUSIC_PATH ? (MUSIC_PATH.endsWith('/') ? MUSIC_PATH : MUSIC_PATH + '/') : '';
+
     let m3u = '#EXTM3U\n';
     m3u += `#PLAYLIST:${name}\n`;
 
@@ -230,26 +275,28 @@ async function handleLibraryPlaylist(req, res) {
       const duration = Math.round(track.duration || 0);
       const display = track.artist ? `${track.artist} - ${track.title}` : track.title;
       m3u += `#EXTINF:${duration},${display}\n`;
-      m3u += `${track.filePath}\n`;
+      m3u += `${musicPrefix}${track.filePath}\n`;
     }
 
-    // Write to Playlists/ directory in the library root
-    const playlistDir = join(LIBRARY_PATH, 'Playlists');
-    await mkdir(playlistDir, { recursive: true });
-
+    // Write to Playlists/ directory in the MUSIC_PATH (final destination)
+    // Also write to LIBRARY_PATH for immediate use before sync
+    const targets = [MUSIC_PATH, LIBRARY_PATH].filter(Boolean);
     const safeName = sanitizePathSegment(name);
-    const playlistPath = join(playlistDir, `${safeName}.m3u`);
+    let writtenPath = '';
 
-    // Prevent path traversal
-    const resolvedPath = resolve(playlistPath);
-    if (!resolvedPath.startsWith(resolve(LIBRARY_PATH))) {
-      return jsonResponse(res, 400, { error: 'Invalid playlist name' });
+    for (const base of targets) {
+      const playlistDir = join(base, 'Playlists');
+      await mkdir(playlistDir, { recursive: true });
+      const playlistPath = join(playlistDir, `${safeName}.m3u`);
+
+      const resolvedPath = resolve(playlistPath);
+      if (!resolvedPath.startsWith(resolve(base))) continue;
+
+      await writeFile(playlistPath, m3u, 'utf-8');
+      if (!writtenPath) writtenPath = `Playlists/${safeName}.m3u`;
     }
 
-    await writeFile(playlistPath, m3u, 'utf-8');
-
-    const relativePath = `Playlists/${safeName}.m3u`;
-    jsonResponse(res, 200, { success: true, path: relativePath });
+    jsonResponse(res, 200, { success: true, playlistId: playlist.id, path: writtenPath });
   } catch (err) {
     console.error('[library/playlist] Error:', err.message);
     jsonResponse(res, 500, { error: err.message });
