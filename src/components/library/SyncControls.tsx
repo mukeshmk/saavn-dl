@@ -220,8 +220,8 @@ export default function SyncControls({ onSyncComplete }: SyncControlsProps) {
             ) : (
               <>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="1 4 1 10 7 10"/>
-                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                 </svg>
                 Sync Now
               </>
@@ -238,11 +238,10 @@ export default function SyncControls({ onSyncComplete }: SyncControlsProps) {
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden"
             >
-              <div className={`rounded-lg px-3 py-2 border text-[11px] font-mono ${
-                syncResult.failed > 0
+              <div className={`rounded-lg px-3 py-2 border text-[11px] font-mono ${syncResult.failed > 0
                   ? 'border-rose/20 bg-rose/5 text-rose/80'
                   : 'border-cyan/20 bg-cyan/5 text-cyan/80'
-              }`}>
+                }`}>
                 ✓ {syncResult.moved} moved · {syncResult.failed} failed · {syncResult.skipped} skipped
               </div>
             </motion.div>
@@ -265,11 +264,10 @@ export default function SyncControls({ onSyncComplete }: SyncControlsProps) {
             <button
               key={preset.label}
               onClick={() => updateSchedule(preset.cron)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${
-                activePreset?.cron === preset.cron
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${activePreset?.cron === preset.cron
                   ? 'bg-cyan/10 border border-cyan/40 text-cyan'
                   : 'border border-border text-text-muted hover:text-text-secondary hover:border-white/10'
-              }`}
+                }`}
             >
               {preset.label}
             </button>
@@ -317,18 +315,16 @@ export default function SyncControls({ onSyncComplete }: SyncControlsProps) {
       <div className="flex gap-2">
         <button
           onClick={() => { setShowHistory(!showHistory); setShowFailed(false); }}
-          className={`px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${
-            showHistory ? 'bg-cyan/10 border border-cyan/30 text-cyan' : 'border border-border text-text-muted hover:text-text-secondary'
-          }`}
+          className={`px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${showHistory ? 'bg-cyan/10 border border-cyan/30 text-cyan' : 'border border-border text-text-muted hover:text-text-secondary'
+            }`}
         >
           History
         </button>
         {(status?.needsAttentionCount ?? 0) > 0 && (
           <button
             onClick={() => { setShowFailed(!showFailed); setShowHistory(false); }}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${
-              showFailed ? 'bg-rose/10 border border-rose/30 text-rose' : 'border border-border text-text-muted hover:text-text-secondary'
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono transition-all ${showFailed ? 'bg-rose/10 border border-rose/30 text-rose' : 'border border-border text-text-muted hover:text-text-secondary'
+              }`}
           >
             Needs Attention ({status?.needsAttentionCount})
           </button>
@@ -395,24 +391,6 @@ export default function SyncControls({ onSyncComplete }: SyncControlsProps) {
 function SyncHistoryList({ status }: { status: SyncStatus }) {
   // We only have lastResult in status directly, but the full history is in config
   // For now show lastResult info; ideally we fetch history from status endpoint
-  const [history, setHistory] = useState<SyncResult[]>([]);
-
-  useEffect(() => {
-    // Fetch full config to get history
-    fetch('/api/library/sync/config')
-      .then((r) => r.json())
-      .then(() => {
-        // The status endpoint provides lastResult; for full history we'd need to extend the API
-        // For now, use the lastResult if available
-        if (status.lastResult) setHistory([status.lastResult]);
-      })
-      .catch(() => {});
-  }, [status]);
-
-  // Try to get history from status fetch — the API already returns history via getStatus
-  // Actually, let's fetch it from sync/status which returns lastResult
-  // We'll work with what we have
-
   if (!status.lastResult) {
     return <p className="text-[11px] font-mono text-text-muted">No sync history yet</p>;
   }

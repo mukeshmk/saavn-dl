@@ -15,7 +15,6 @@ export default function DownloadManagerPanel({ isOpen, onClose }: Props) {
     removeItem, retryItem, cancelCurrent,
     clearCompleted, clearAll,
     pause, resume, moveUp, moveDown,
-    downloadArtifact,
   } = useDownloadQueue();
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -81,8 +80,8 @@ export default function DownloadManagerPanel({ isOpen, onClose }: Props) {
                 <button
                   onClick={isPaused ? resume : pause}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono border transition-all ${isPaused
-                      ? 'border-cyan/30 bg-cyan/10 text-cyan'
-                      : 'border-border text-white/50 hover:border-white/20 hover:text-white/70'
+                    ? 'border-cyan/30 bg-cyan/10 text-cyan'
+                    : 'border-border text-white/50 hover:border-white/20 hover:text-white/70'
                     }`}
                 >
                   {isPaused ? (
@@ -518,10 +517,10 @@ function AlbumTrackList({ albumItem }: { albumItem: QueueAlbumItem }) {
         <div key={t.id} className="flex items-center gap-2 px-1 py-0.5">
           <TrackStatusDot status={t.status} />
           <span className={`text-[10px] font-mono truncate flex-1 ${t.status === 'done' ? 'text-emerald-400/80'
-              : t.status === 'failed' ? 'text-rose/80'
-                : t.status === 'skipped' ? 'text-white/30 line-through'
-                  : t.status === 'downloading' ? 'text-cyan'
-                    : 'text-white/50'
+            : t.status === 'failed' ? 'text-rose/80'
+              : t.status === 'skipped' ? 'text-white/30 line-through'
+                : t.status === 'downloading' ? 'text-cyan'
+                  : 'text-white/50'
             }`}>
             {t.title}
           </span>

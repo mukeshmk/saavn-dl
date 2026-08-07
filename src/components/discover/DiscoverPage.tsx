@@ -308,7 +308,7 @@ interface DiscoverCardProps {
   isDownloaded?: boolean;
 }
 
-function DiscoverCard({ item, type, isLoading, onClick, isDownloaded }: DiscoverCardProps) {
+function DiscoverCard({ item, isLoading, onClick, isDownloaded }: DiscoverCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
