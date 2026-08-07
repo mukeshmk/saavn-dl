@@ -1,4 +1,5 @@
 import type { PlaylistSearchResult, PlaylistDetail } from '../types/saavn';
+import { asResultsArray } from '../types/saavn';
 import { proxyFetch } from './proxy';
 
 const SEARCH_API = 'https://rthmx.vercel.app/api/playlists';
@@ -13,11 +14,7 @@ export async function searchPlaylists(query: string): Promise<PlaylistSearchResu
   const res = await proxyFetch(`${SEARCH_API}?q=${encodeURIComponent(query.trim())}`);
   if (!res.ok) throw new Error(`Playlist search failed: HTTP ${res.status}`);
   const data = await res.json();
-  const arr: PlaylistSearchResult[] = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.results)
-      ? data.results
-      : [];
+  const arr = asResultsArray<PlaylistSearchResult>(data);
   return arr.filter((r) => r.type === 'playlist' || r.id);
 }
 

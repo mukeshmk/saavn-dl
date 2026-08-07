@@ -1,4 +1,6 @@
 import type { SaavnSong } from './saavn';
+import { getSongArtist } from './saavn';
+import { sanitizeFilename } from '../utils/decrypt';
 
 // ─── Editable metadata shape ──────────────────────────────────────────────────
 
@@ -20,10 +22,7 @@ export interface TrackMetadata {
 // ─── Build default metadata from a SaavnSong ─────────────────────────────────
 
 export function buildDefaultMetadata(song: SaavnSong): TrackMetadata {
-  const artist =
-    song.subtitle?.split(' - ')[0]?.trim() ||
-    song.more_info.artists?.primary?.map((a) => a.name).join(', ') ||
-    'Unknown Artist';
+  const artist = getSongArtist(song);
 
   const filename = `${song.title} - ${artist}`;
 
@@ -56,13 +55,7 @@ export function metadataIsModified(
 
 // ─── Filename sanitisation ────────────────────────────────────────────────────
 
-const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
-
-export function sanitizeFilenameField(name: string): string {
-  return name.replace(INVALID_FILENAME_CHARS, '').replace(/\s+/g, ' ').trim();
-}
-
-export function resolveFilename(raw: string, fallback: string): string {
-  const sanitized = sanitizeFilenameField(raw);
-  return sanitized || sanitizeFilenameField(fallback);
-}
+// Single client-side filename sanitizer — illegal filesystem chars become '-'.
+// Shared with download/album filenames (and matches the server's parity-tested
+// behavior) so the same name is produced everywhere.
+export { sanitizeFilename as sanitizeFilenameField };

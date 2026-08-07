@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SaavnSong, Quality } from '../types/saavn';
+import { getSongArtist } from '../types/saavn';
 import AudioPreview from './AudioPreview';
 import QualitySelector from './QualitySelector';
 import DownloadAction from './DownloadAction';
@@ -32,7 +33,6 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const { more_info } = song;
-  const primaryArtists = more_info.artists.primary.map((a) => a.name).join(', ');
   const imageUrl =
     `https://sda.rhythmax.workers.dev/image?url=${encodeURIComponent(song.image)}`;
   // Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
@@ -107,11 +107,7 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
                 </div>
 
                 <p className="mt-1 text-sm text-white/60 font-body truncate">
-                  {
-                    song.subtitle
-                      ?.split(' - ')[0]
-                      ?.trim() || primaryArtists
-                  }
+                  {getSongArtist(song)}
                 </p>
 
                 <div className="mt-2 flex items-center gap-3 flex-wrap">

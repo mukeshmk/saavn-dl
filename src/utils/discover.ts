@@ -4,6 +4,7 @@
  */
 
 import { proxyFetch } from './proxy';
+import { asResultsArray } from '../types/saavn';
 
 const API_BASE = 'https://rthmx.vercel.app/api';
 // Default API (rthmx.vercel.app). Replace with your jiosaavn-api instance.
@@ -97,16 +98,10 @@ export async function fetchNewReleases(languages?: string[]): Promise<DiscoverAl
   if (!res.ok) throw new Error(`New releases failed: HTTP ${res.status}`);
   const data = await res.json();
 
-  // Normalize response — may be array or { results: [...] }
-  const items = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.results)
-      ? data.results
-      : Array.isArray(data?.albums)
-        ? data.albums
-        : [];
+  // Normalize response — may be array or { results: [...] } or { albums: [...] }
+  const items = asResultsArray<DiscoverAlbum>(data, ['results', 'albums']);
 
-  return items.filter((item: any) => item?.id && item?.title);
+  return items.filter((item) => item?.id && item?.title);
 }
 
 /**
@@ -118,13 +113,9 @@ export async function fetchRelatedAlbums(albumId: string): Promise<DiscoverAlbum
   if (!res.ok) return []; // Non-critical, fail silently
   const data = await res.json();
 
-  const items = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.results)
-      ? data.results
-      : [];
+  const items = asResultsArray<DiscoverAlbum>(data);
 
-  return items.filter((item: any) => item?.id && item?.title);
+  return items.filter((item) => item?.id && item?.title);
 }
 
 /**
@@ -153,7 +144,6 @@ export async function fetchArtistPlaylists(artistToken: string): Promise<Discove
 
 // ─── History-based personalization ────────────────────────────────────────────
 
-import type { HistoryEntry } from './history';
 import { getHistory } from './history';
 
 export interface PersonalizationData {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PlaylistDetail, SaavnSong, Quality } from '../../types/saavn';
-import { proxyImage, formatDuration, totalAlbumDuration } from '../../types/saavn';
+import { proxyImage, formatDuration, totalAlbumDuration, getSongArtist } from '../../types/saavn';
 import AudioPreview from '../AudioPreview';
 import DownloadAction from '../DownloadAction';
 import MetadataEditor from '../MetadataEditor';
@@ -249,9 +249,7 @@ function TrackRow({ song, index, quality, isExpanded, onToggle, isDownloaded }: 
   }, [song.id]);
 
   const duration = song.more_info?.duration ? formatDuration(song.more_info.duration) : null;
-  const artist = song.subtitle?.split(' - ')[0]?.trim()
-    || song.more_info?.artists?.primary?.[0]?.name
-    || '';
+  const artist = getSongArtist(song);
   const albumName = song.more_info?.album || '';
 
   const thumbUrl = proxyImage(song.image, '150x150');

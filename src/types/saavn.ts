@@ -78,6 +78,36 @@ export function extractArtistFromSubtitle(subtitle: string) {
   return subtitle?.split(' - ')[0]?.trim() || 'Unknown Artist';
 }
 
+/**
+ * Canonical artist string for a song: the subtitle artist if present,
+ * otherwise all primary artists joined. Single source of truth for the
+ * artist used in filenames, tags, and multi-artist detection.
+ */
+export function getSongArtist(song: SaavnSong): string {
+  const fromSubtitle = song.subtitle?.split(' - ')[0]?.trim();
+  if (fromSubtitle) return fromSubtitle;
+  return song.more_info?.artists?.primary?.map((a) => a.name).join(', ') || 'Unknown Artist';
+}
+
+/** 500x500 https cover URL for a song (raw CDN url; callers proxy as needed). */
+export function getSongCoverUrl(song: SaavnSong): string {
+  return song.image.replace(/\d+x\d+/, '500x500').replace('http://', 'https://');
+}
+
+/**
+ * Normalize a search-style API response into an array. The API sometimes
+ * returns a bare array and sometimes wraps it (e.g. { results: [...] }).
+ * `keys` lists the wrapper properties to check, in order.
+ */
+export function asResultsArray<T>(data: unknown, keys: string[] = ['results']): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const obj = data as Record<string, unknown> | null;
+  for (const key of keys) {
+    if (Array.isArray(obj?.[key])) return obj![key] as T[];
+  }
+  return [];
+}
+
 export function formatDuration(sec?: string) {
   if (!sec) return '';
 
@@ -173,11 +203,6 @@ export function albumImage(url: string): string {
   return proxyImage(url, '500x500');
 }
 
-/** hiResImage used by search result cards */
-export function hiResImage(url: string): string {
-  return proxyImage(url, '150x150');
-}
-
 export function isSaavnAlbumUrl(value: string): boolean {
   return /jiosaavn\.com\/album\//i.test(value.trim());
 }
@@ -228,20 +253,6 @@ export interface ArtistDetail {
   topAlbums: ArtistAlbum[];
   singles: ArtistAlbum[];
   latest_release: ArtistAlbum[];
-}
-
-export function isSaavnArtistUrl(value: string): boolean {
-  return /jiosaavn\.com\/artist\//i.test(value.trim());
-}
-
-export function isSaavnPlaylistUrl(value: string): boolean {
-  return /jiosaavn\.com\/(featured|s\/playlist)\//i.test(value.trim());
-}
-
-/** Extract artist token from a JioSaavn artist URL */
-export function extractArtistToken(url: string): string {
-  const parts = url.trim().replace(/\/$/, '').split('/');
-  return parts[parts.length - 1] || '';
 }
 
 // ─── Playlist types ───────────────────────────────────────────────────────────

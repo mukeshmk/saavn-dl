@@ -1,4 +1,5 @@
 import type { AlbumSearchResult, AlbumDetail } from '../types/saavn';
+import { asResultsArray } from '../types/saavn';
 import { proxyFetch } from './proxy';
 
 const SEARCH_API = 'https://rthmx.vercel.app/api/albums';
@@ -14,11 +15,7 @@ export async function searchAlbums(query: string): Promise<AlbumSearchResult[]> 
   if (!res.ok) throw new Error(`Album search failed: HTTP ${res.status}`);
   const data = await res.json();
   // normalise — API returns { total, start, results: [...] }
-  const arr: AlbumSearchResult[] = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.results)
-      ? data.results
-      : [];
+  const arr = asResultsArray<AlbumSearchResult>(data);
   return arr.filter((r) => r.type === 'album' || r.id);
 }
 
