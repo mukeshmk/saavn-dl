@@ -83,6 +83,8 @@ When self-hosted, **all external traffic** is routed through `/api/proxy` — th
 
 A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (Surfshark/WireGuard) + saavn-dl configured with VPN routing, Library Sync, and persistent SQLite storage. See [`docker-compose.yml`](./docker-compose.yml) for the full setup.
 
+The proxy keeps latency low over the tunnel: it pools TCP/TLS connections (keep-alive), requests upstream compression and forwards it untouched, and sets cache headers (7 days for images, 5 minutes for API JSON). Cover art is fetched same-origin through `/api/proxy` too, skipping the extra third-party image hop.
+
 > **Note:** On static deployments (e.g. Vercel) where the proxy is unavailable, the app falls back to direct browser fetches automatically. Set `SAAVN_FORCE_PROXY=true` to disable this fallback — requests will fail hard if the proxy is unreachable, preventing any traffic from leaking outside the VPN tunnel.
 
 ---
@@ -98,6 +100,8 @@ A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (
 | `SAAVN_ARTIFACT_DIR` | _(DB dir)_`/artifacts` | Where server-side browser-delivery files are held until the browser fetches them.                                |
 | `SAAVN_ARTIFACT_TTL` | `86400`                | Seconds to keep an unfetched browser-delivery artifact before cleanup (default 24h).                             |
 | `SAAVN_FORCE_PROXY`  | _(empty)_              | Set to `true` or `1` to prevent fallback to direct browser fetch. Requests fail if the VPN proxy is unreachable. |
+| `SAAVN_LOG_LEVEL`    | `info`                 | Server log verbosity: `error`, `warn`, `info`, or `debug`. Wins over `SAAVN_DEBUG` when set to a valid value.    |
+| `SAAVN_DEBUG`        | _(empty)_              | Set to `true` or `1` as a shortcut for `SAAVN_LOG_LEVEL=debug` (verbose per-request/per-track tracing).          |
 | `PORT`               | `80`                   | Server listen port.                                                                                              |
 | `STATIC_DIR`         | `./dist`               | Path to built frontend assets.                                                                                   |
 
@@ -237,30 +241,54 @@ saavn-dl detects this automatically:
 
 ## API Endpoints
 
-| Method   | Path                                                      | Description                                                                |
-| -------- | --------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `GET`    | `/api/config`                                             | Server capabilities (library, sync, history, server-downloads flags)       |
-| `GET`    | `/api/proxy?url=`                                         | Proxy all external fetches through server (VPN) — API calls, audio, images |
-| `GET`    | `/api/library/browse?path=`                               | List directory contents                                                    |
-| `POST`   | `/api/library/sync`                                       | Trigger immediate sync                                                     |
-| `GET`    | `/api/library/sync/status`                                | Sync status + scheduler state                                              |
-| `GET`    | `/api/library/sync/config`                                | Current sync config                                                        |
-| `POST`   | `/api/library/sync/config`                                | Update sync config                                                         |
-| `POST`   | `/api/library/sync/reset-retries`                         | Reset retry counts                                                         |
-| `GET`    | `/api/history`                                            | List history entries (`?type=track\|album`)                                |
-| `GET`    | `/api/history/ids`                                        | Downloaded IDs for badge lookups                                           |
-| `GET`    | `/api/history/albums/:id/tracks`                          | Per-track data for an album                                                |
-| `POST`   | `/api/history`                                            | Record a download                                                          |
-| `DELETE` | `/api/history`                                            | Clear all history                                                          |
-| `DELETE` | `/api/history/:id`                                        | Remove a specific entry                                                    |
-| `GET`    | `/api/downloads`                                          | Current server-side download queue state                                   |
-| `GET`    | `/api/downloads/events`                                   | Live queue updates (Server-Sent Events)                                    |
-| `POST`   | `/api/downloads/track`                                    | Enqueue a track job                                                        |
-| `POST`   | `/api/downloads/album`                                    | Enqueue an album/playlist job                                              |
-| `POST`   | `/api/downloads/:id/cancel` \| `/retry` \| `/move`        | Cancel, retry, or reorder a job                                            |
-| `DELETE` | `/api/downloads/:id`                                      | Remove a job                                                               |
-| `POST`   | `/api/downloads/pause` \| `/resume` \| `/clear-completed` | Queue controls                                                             |
-| `GET`    | `/api/downloads/:id/artifact`                             | Fetch a completed browser-delivery file                                    |
+| Method   | Path                                                      | Description                                                                      |
+| -------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `GET`    | `/api/config`                                             | Server capabilities (library, sync, history, server-downloads flags) + log level |
+| `GET`    | `/api/proxy?url=`                                         | Proxy all external fetches through server (VPN) — API calls, audio, images       |
+| `GET`    | `/api/library/browse?path=`                               | List directory contents                                                          |
+| `POST`   | `/api/library/sync`                                       | Trigger immediate sync                                                           |
+| `GET`    | `/api/library/sync/status`                                | Sync status + scheduler state                                                    |
+| `GET`    | `/api/library/sync/config`                                | Current sync config                                                              |
+| `POST`   | `/api/library/sync/config`                                | Update sync config                                                               |
+| `POST`   | `/api/library/sync/reset-retries`                         | Reset retry counts                                                               |
+| `GET`    | `/api/history`                                            | List history entries (`?type=track\|album`)                                      |
+| `GET`    | `/api/history/ids`                                        | Downloaded IDs for badge lookups                                                 |
+| `GET`    | `/api/history/albums/:id/tracks`                          | Per-track data for an album                                                      |
+| `POST`   | `/api/history`                                            | Record a download                                                                |
+| `DELETE` | `/api/history`                                            | Clear all history                                                                |
+| `DELETE` | `/api/history/:id`                                        | Remove a specific entry                                                          |
+| `GET`    | `/api/downloads`                                          | Current server-side download queue state                                         |
+| `GET`    | `/api/downloads/events`                                   | Live queue updates (Server-Sent Events)                                          |
+| `POST`   | `/api/downloads/track`                                    | Enqueue a track job                                                              |
+| `POST`   | `/api/downloads/album`                                    | Enqueue an album/playlist job                                                    |
+| `POST`   | `/api/downloads/:id/cancel` \| `/retry` \| `/move`        | Cancel, retry, or reorder a job                                                  |
+| `DELETE` | `/api/downloads/:id`                                      | Remove a job                                                                     |
+| `POST`   | `/api/downloads/pause` \| `/resume` \| `/clear-completed` | Queue controls                                                                   |
+| `GET`    | `/api/downloads/:id/artifact`                             | Fetch a completed browser-delivery file                                          |
+
+---
+
+## Logging & Debugging
+
+Both the server and the browser client share a small leveled logger. `error`/`warn` always print; `info`/`debug` are gated on the active level.
+
+**Server** — the level is resolved once at startup from the environment:
+
+```bash
+SAAVN_LOG_LEVEL=debug node server/index.js   # error | warn | info (default) | debug
+SAAVN_DEBUG=1 node server/index.js           # shortcut for debug
+```
+
+Lines are pipe-delimited for easy `grep`/`cut`/`awk` (`timestamp | LEVEL | scope | message`). `debug` traces per-request proxy/VPN routing, downloads, syncs, and library writes. API calls log at `info`; the high-volume `/api/proxy` and static routes log at `debug`. Timestamps honor the `TZ` env var (UTC in a default container).
+
+**Client** — the browser logger mirrors the server's debug flag (surfaced via `/api/config` as `logLevel`/`debug`). You can also flip it on without a rebuild — handy on static deployments — from the devtools console:
+
+```js
+saavnDebug(true)   // enable verbose client logs (persists across reloads)
+saavnDebug(false)  // disable
+```
+
+The toggle is stored in `localStorage` (`saavn:debug`), and all messages carry a `[scope]` prefix so they stay greppable.
 
 ---
 
