@@ -14,8 +14,10 @@ import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { createLogger } from '../log.js';
 
 const require = createRequire(import.meta.url);
+const log = createLogger('downloads/ffmpeg');
 
 // ─── Binary resolution ──────────────────────────────────────────────────────
 
@@ -66,11 +68,11 @@ export function probeFfmpeg() {
   return new Promise((resolvePromise) => {
     execFile(bin, ['-version'], { timeout: 10_000 }, (err, stdout) => {
       if (err) {
-        console.warn(`[downloads/ffmpeg] probe failed for "${bin}": ${err.message}`);
+        log.warn('probe failed for "%s": %s', bin, err.message);
         probeResult = false;
       } else {
         const version = String(stdout).split('\n')[0] || 'unknown';
-        console.log(`[downloads/ffmpeg] using binary: ${bin} (${version.trim()})`);
+        log.info('using binary: %s (%s)', bin, version.trim());
         probeResult = true;
       }
       resolvePromise(probeResult);

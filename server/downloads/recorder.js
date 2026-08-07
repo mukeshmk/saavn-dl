@@ -8,13 +8,17 @@
  */
 
 import { addEntry } from '../history/store.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('downloads/recorder');
 
 /** Record a standalone track (mirrors client recordDownload({ type: 'track', ... })). */
 export function recordTrack(entry) {
   try {
     addEntry({ type: 'track', ...entry });
+    log.debug('recorded track history: "%s"', entry?.title || entry?.saavnId || '—');
   } catch (err) {
-    console.warn('[downloads/recorder] track history write failed:', err.message);
+    log.warn('track history write failed:', err.message);
   }
 }
 
@@ -25,7 +29,8 @@ export function recordTrack(entry) {
 export function recordAlbum(entry) {
   try {
     addEntry({ type: 'album', ...entry });
+    log.debug('recorded album history: "%s" (%d tracks)', entry?.title || entry?.saavnId || '—', entry?.tracks?.length || 0);
   } catch (err) {
-    console.warn('[downloads/recorder] album history write failed:', err.message);
+    log.warn('album history write failed:', err.message);
   }
 }

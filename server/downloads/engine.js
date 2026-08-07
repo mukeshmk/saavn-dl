@@ -16,6 +16,9 @@ import { join, resolve } from 'node:path';
 import { decryptMediaUrl, getQualityUrl, sanitizePathSegment } from './decrypt.js';
 import { fetchAllowed } from './fetcher.js';
 import { runFfmpeg, ensureJobTempDir, jobTempDir } from './ffmpeg.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('downloads/engine');
 
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 
@@ -84,6 +87,8 @@ export async function processTrack(song, quality, opts = {}) {
 
   if (signal?.aborted) throw new Error('Aborted');
 
+  log.debug('processTrack "%s" @ %skbps (job %s)', song.title, quality, jobId);
+
   onProgress('Decrypting…', 8);
   const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
   const audioUrl = getQualityUrl(decrypted, quality);
@@ -102,6 +107,7 @@ export async function processTrack(song, quality, opts = {}) {
   } catch {
     // cover is optional
   }
+  log.debug('processTrack "%s": audio %db, cover %s', song.title, audioBuf.byteLength, coverBuf ? `${coverBuf.byteLength}b` : 'none');
 
   if (signal?.aborted) throw new Error('Aborted');
 
@@ -160,7 +166,7 @@ export async function processTrack(song, quality, opts = {}) {
       } catch (err) {
         if (signal?.aborted) throw err;
         // Cover embed failed — retry metadata-only (mirrors client fallback).
-        console.warn('[downloads/engine] cover embed failed, retrying without cover:', err.message);
+        log.warn('cover embed failed for "%s", retrying without cover: %s', song.title, err.message);
         onProgress('Cover failed, embedding metadata only…', 72);
         try { await unlink(outF); } catch { /* ignore */ }
         const metaArgs = ['-i', inF, '-c', 'copy', ...metadataArgs(meta), '-movflags', '+faststart', outF];
@@ -216,9 +222,11 @@ export async function writeToLibrary(buffer, artist, album, filename) {
 
   await writeFile(targetPath, buffer);
 
-  return safeArtist
+  const relPath = safeArtist
     ? `${safeArtist}/${safeAlbum}/${safeFilename}`
     : `${safeAlbum}/${safeFilename}`;
+  log.debug('wrote %db → library/%s', buffer.length, relPath);
+  return relPath;
 }
 
 export { jobTempDir };

@@ -6,6 +6,9 @@ import { trackToBlob, triggerDownload } from './download';
 import { proxyFetch } from './proxy';
 import { recordDownload } from './history';
 import { getConfig } from './config';
+import { createLogger } from './logger';
+
+const log = createLogger('albumDownload');
 
 // ─── Naming helpers (single source for on-disk folder + file names) ───────────
 
@@ -613,7 +616,7 @@ export async function downloadPlaylistLibrary(
     try {
       await createPlaylistFile(album.title, playlistTracks);
     } catch (err) {
-      console.error('Failed to create playlist file:', err);
+      log.error('failed to create playlist file:', err);
       // Non-fatal — tracks were still saved
     }
   }

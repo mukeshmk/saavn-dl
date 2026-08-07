@@ -4,7 +4,10 @@ import type { SaavnSong } from '../types/saavn';
 import { getSongArtist, getSongCoverUrl } from '../types/saavn';
 import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from './decrypt';
 import { proxyFetch } from './proxy';
+import { createLogger } from './logger';
 import type { TrackMetadata } from '../types/metadata';
+
+const log = createLogger('download');
 
 // ─── FFmpeg singleton ──────────────────────────────────────────────────────────
 
@@ -19,9 +22,9 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   loadPromise = (async () => {
     ffmpegInstance = new FFmpeg();
 
-    // Mirror log to console for debugging
+    // Mirror ffmpeg.wasm's internal logs (only shown in debug mode).
     ffmpegInstance.on('log', ({ message }) => {
-      console.debug('[ffmpeg]', message);
+      log.debug('[ffmpeg]', message);
     });
 
     const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
@@ -221,6 +224,7 @@ export async function trackToBlob(song: SaavnSong, opts: TrackBlobOptions): Prom
   const { quality, onProgress, overrideMeta, albumArtistOverride, scope = '' } = opts;
   const { more_info } = song;
 
+  log.debug('trackToBlob "%s" @ %skbps (in-browser pipeline)', song.title, quality);
   onProgress?.('Decrypting URL…', 8);
   const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
   const audioUrl = getQualityUrl(decrypted, quality);
@@ -268,7 +272,7 @@ export async function trackToBlob(song: SaavnSong, opts: TrackBlobOptions): Prom
       outputData = await embedWithCover(ff, audioData, coverData, meta, scope);
     } catch (err) {
       // Cover embedding failed — retry without cover
-      console.warn('[saavn-dl] Cover embed failed, retrying without cover:', err);
+      log.warn('cover embed failed, retrying without cover:', err);
       onProgress?.('Cover failed, embedding metadata only…', 72);
       outputData = await embedMetaOnly(ff, audioData, meta, scope);
     }

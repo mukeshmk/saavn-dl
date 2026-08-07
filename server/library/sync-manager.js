@@ -12,6 +12,9 @@ import { join, resolve, relative } from 'node:path';
 import { existsSync } from 'node:fs';
 import { getDb } from '../db/index.js';
 import { generateAllM3U8 } from '../playlists/store.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('sync');
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -268,6 +271,7 @@ export async function sync() {
 
   // Walk all files in library
   const allFiles = await walkDir(LIBRARY_PATH, LIBRARY_PATH);
+  log.info('sync starting: %d file(s) in library %s → %s', allFiles.length, LIBRARY_PATH, MUSIC_PATH);
 
   let moved = 0;
   let failed = 0;
@@ -278,6 +282,7 @@ export async function sync() {
     // Check if file has exceeded retry limit
     const fileRecord = getFailedFile(relPath);
     if (fileRecord && fileRecord.retry_count >= retryLimit) {
+      log.debug('skip (retry limit %d reached): %s', retryLimit, relPath);
       skipped++;
       continue;
     }
@@ -292,6 +297,7 @@ export async function sync() {
 
       await moveFile(srcPath, destPath);
       moved++;
+      log.debug('moved: %s', relPath);
 
       // Clear any previous failure record on success
       removeFailedFile(relPath);
@@ -303,6 +309,7 @@ export async function sync() {
       // Update retry count
       const existing = getFailedFile(relPath);
       const newCount = (existing ? existing.retry_count : 0) + 1;
+      log.warn('move failed (attempt %d/%d) for %s: %s', newCount, retryLimit, relPath, errMsg);
       upsertFailedFile(relPath, newCount, errMsg);
     }
   }
@@ -325,6 +332,7 @@ export async function sync() {
   // Persist sync run and update last sync time
   recordSyncRun(result);
   writeConfig({ lastSyncTime: result.timestamp });
+  log.info('sync complete: %d moved, %d failed, %d skipped', moved, failed, skipped);
 
   // Auto-export playlists as .m3u8 to MUSIC_PATH/Playlists/
   try {
@@ -340,10 +348,10 @@ export async function sync() {
         const filePath = join(playlistsDir, `${safeName}.m3u`);
         await writeFile(filePath, m3u8.content, 'utf-8');
       }
-      console.log(`[sync] Exported ${allM3U8.length} playlist(s) to ${playlistsDir}`);
+      log.info('exported %d playlist(s) to %s', allM3U8.length, playlistsDir);
     }
   } catch (err) {
-    console.warn('[sync] Playlist export failed:', err.message);
+    log.warn('playlist export failed:', err.message);
   }
 
   return result;

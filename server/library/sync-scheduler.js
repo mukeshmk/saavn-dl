@@ -7,6 +7,9 @@
 
 import cron from 'node-cron';
 import { sync, readConfig } from './sync-manager.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('sync-scheduler');
 
 let scheduledTask = null;
 let currentExpression = '';
@@ -36,24 +39,24 @@ export function startScheduler(cronExpression) {
 
   scheduledTask = cron.schedule(cronExpression, async () => {
     if (isRunning) {
-      console.log('[sync-scheduler] Sync already in progress, skipping scheduled run');
+      log.info('sync already in progress, skipping scheduled run');
       return;
     }
 
-    console.log('[sync-scheduler] Running scheduled sync...');
+    log.info('running scheduled sync...');
     isRunning = true;
 
     try {
       const result = await sync();
-      console.log(`[sync-scheduler] Sync complete: ${result.moved} moved, ${result.failed} failed, ${result.skipped} skipped`);
+      log.info('scheduled sync complete: %d moved, %d failed, %d skipped', result.moved, result.failed, result.skipped);
     } catch (err) {
-      console.error('[sync-scheduler] Sync failed:', err.message);
+      log.error('scheduled sync failed:', err.message);
     } finally {
       isRunning = false;
     }
   });
 
-  console.log(`[sync-scheduler] Scheduler started with expression: ${cronExpression}`);
+  log.info('scheduler started with expression: %s', cronExpression);
   return true;
 }
 
@@ -105,14 +108,14 @@ export function initScheduler() {
     if (config.schedule) {
       const started = startScheduler(config.schedule);
       if (started) {
-        console.log(`[sync-scheduler] Auto-started with saved schedule: ${config.schedule}`);
+        log.info('auto-started with saved schedule: %s', config.schedule);
       } else {
-        console.warn(`[sync-scheduler] Saved schedule is invalid: ${config.schedule}`);
+        log.warn('saved schedule is invalid: %s', config.schedule);
       }
     } else {
-      console.log('[sync-scheduler] No schedule configured, scheduler inactive');
+      log.info('no schedule configured, scheduler inactive');
     }
   } catch (err) {
-    console.error('[sync-scheduler] Failed to initialize scheduler:', err.message);
+    log.error('failed to initialize scheduler:', err.message);
   }
 }

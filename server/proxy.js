@@ -14,6 +14,9 @@
 import { request as httpsRequest, Agent as HttpsAgent } from 'node:https';
 import { request as httpRequest, Agent as HttpAgent } from 'node:http';
 import { URL } from 'node:url';
+import { createLogger } from './log.js';
+
+const log = createLogger('proxy');
 
 // Reuse TCP+TLS connections across proxied requests. Without this, Node's
 // default global agent (keepAlive: false) opens a fresh connection — and a
@@ -76,12 +79,18 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
   }
 
   if (!isAllowedHost(targetUrl.hostname)) {
+    log.warn('rejected disallowed host: %s', targetUrl.hostname);
     jsonResponse(res, 403, { error: `Host "${targetUrl.hostname}" is not in the allowlist` });
     return true;
   }
 
   const isHttps = targetUrl.protocol === 'https:';
   const requestFn = isHttps ? httpsRequest : httpRequest;
+
+  // Every request here egresses through the server's network stack — i.e. the
+  // VPN (gluetun) when running in that container — rather than the browser.
+  const startedAt = Date.now();
+  log.debug('→ %s %s (via server%s)', targetUrl.hostname, targetUrl.pathname, isHttps ? '/https' : '');
 
   const options = {
     hostname: targetUrl.hostname,
@@ -110,6 +119,7 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
         return;
       }
       // Rewrite the URL param and recurse
+      log.debug('↪ %d redirect to %s', proxyRes.statusCode, redirectUrl.hostname);
       const newUrl = new URL(req.url, `http://localhost`);
       newUrl.searchParams.set('url', redirectUrl.href);
       handleProxyRoute(req, res, newUrl, jsonResponse);
@@ -152,9 +162,10 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.writeHead(proxyRes.statusCode || 200);
       res.end(body);
+      log.debug('← %s %d %db (%dms) [%s]', targetUrl.hostname, proxyRes.statusCode || 200, body.length, Date.now() - startedAt, contentType || 'unknown');
     });
     proxyRes.on('error', (err) => {
-      console.error('[api-proxy] Upstream read error:', err.message);
+      log.error('upstream read error from %s: %s', targetUrl.hostname, err.message);
       if (!res.headersSent) {
         jsonResponse(res, 502, { error: `Upstream read failed: ${err.message}` });
       }
@@ -162,7 +173,7 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
   });
 
   proxyReq.on('error', (err) => {
-    console.error('[api-proxy] Request error:', err.message);
+    log.error('request error to %s: %s', targetUrl.hostname, err.message);
     if (!res.headersSent) {
       jsonResponse(res, 502, { error: `Proxy fetch failed: ${err.message}` });
     }

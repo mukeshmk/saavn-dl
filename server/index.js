@@ -27,6 +27,9 @@ import { writeToLibrary } from './downloads/engine.js';
 import { probeFfmpeg } from './downloads/ffmpeg.js';
 import { downloadWorker } from './downloads/queue.js';
 import { sweepArtifacts, ARTIFACT_TTL_SECONDS } from './downloads/artifacts.js';
+import { createLogger, getLogLevel, isDebugEnabled } from './log.js';
+
+const log = createLogger('server');
 
 const PORT = parseInt(process.env.PORT || '80', 10);
 const STATIC_DIR = resolve(process.env.STATIC_DIR || './dist');
@@ -103,6 +106,9 @@ async function handleApiConfig(req, res) {
     dbPath: DB_PATH,
     forceProxy: FORCE_PROXY,
     serverDownloadsEnabled,
+    // Surface the server's log level so the client logger can mirror debug mode.
+    logLevel: getLogLevel(),
+    debug: isDebugEnabled(),
   });
 }
 
@@ -123,10 +129,12 @@ async function handleLibrarySave(req, res) {
 
   try {
     const body = await parseMultipartBody(req);
+    log.debug('library/save: writing "%s" (artist=%s, album=%s, %d bytes)', filename, artist || '—', album, body.length);
     const relativePath = await writeToLibrary(body, artist, album, filename);
+    log.info('library/save: saved %s', relativePath);
     jsonResponse(res, 200, { success: true, path: relativePath });
   } catch (err) {
-    console.error('[library/save] Error:', err.message);
+    log.error('library/save failed:', err.message);
     jsonResponse(res, 500, { error: err.message });
   }
 }
@@ -151,9 +159,10 @@ async function handleLibraryCheckTracks(req, res) {
     }
 
     const existing = getExistingTracks(saavnIds);
+    log.debug('library/check-tracks: %d requested, %d already in library', saavnIds.length, Object.keys(existing || {}).length);
     jsonResponse(res, 200, { existing });
   } catch (err) {
-    console.error('[library/check-tracks] Error:', err.message);
+    log.error('library/check-tracks failed:', err.message);
     jsonResponse(res, 500, { error: err.message });
   }
 }
@@ -181,9 +190,10 @@ async function handleLibraryPlaylist(req, res) {
     }
 
     const { playlistId, path } = await createPlaylistFile(name, tracks);
+    log.info('library/playlist: created "%s" (%d tracks) → %s', name, tracks.length, path);
     jsonResponse(res, 200, { success: true, playlistId, path });
   } catch (err) {
-    console.error('[library/playlist] Error:', err.message);
+    log.error('library/playlist failed:', err.message);
     jsonResponse(res, 500, { error: err.message });
   }
 }
@@ -267,6 +277,8 @@ async function serveStatic(req, res) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
+  logRequest(req, res, url);
+
   try {
     // API routes
     if (url.pathname === '/api/config' && req.method === 'GET') {
@@ -311,12 +323,28 @@ const server = createServer(async (req, res) => {
     // Static files
     await serveStatic(req, res);
   } catch (err) {
-    console.error('[server] Unhandled error:', err);
+    log.error('unhandled error on %s %s:', req.method, url.pathname, err);
     setCorsHeaders(res);
     res.writeHead(500);
     res.end('Internal Server Error');
   }
 });
+
+/**
+ * Per-request access log. API calls log at info (the "what calls are being
+ * made" view); the high-volume proxy + static routes log at debug so they only
+ * appear in debug mode. Logs once on response completion with status + duration.
+ */
+function logRequest(req, res, url) {
+  const start = Date.now();
+  const { pathname } = url;
+  const isApi = pathname.startsWith('/api/');
+  // Proxy carries every image/audio fetch — noisy, so keep it at debug.
+  const level = isApi && pathname !== '/api/proxy' ? 'info' : 'debug';
+  res.on('finish', () => {
+    log[level]('%s %s → %d (%dms)', req.method, pathname, res.statusCode, Date.now() - start);
+  });
+}
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
@@ -325,7 +353,7 @@ async function startup() {
   try {
     initDb();
   } catch (err) {
-    console.error('[saavn-dl] FATAL: Database initialization failed:', err.message);
+    log.error('FATAL: database initialization failed:', err.message);
     process.exit(1);
   }
 
@@ -334,58 +362,59 @@ async function startup() {
   try {
     ffmpegAvailable = await probeFfmpeg();
   } catch (err) {
-    console.warn('[saavn-dl] ffmpeg probe threw:', err.message);
+    log.warn('ffmpeg probe threw:', err.message);
   }
   serverDownloadsEnabled = !!LIBRARY_PATH && ffmpegAvailable;
 
   server.listen(PORT, () => {
-    console.log(`[saavn-dl] Server running on port ${PORT}`);
-    console.log(`[saavn-dl] Static dir: ${STATIC_DIR}`);
-    console.log(`[saavn-dl] Database: ${DB_PATH}`);
+    log.info('server running on port %d', PORT);
+    log.info('log level: %s (set SAAVN_DEBUG=1 or SAAVN_LOG_LEVEL=debug for verbose logs)', getLogLevel());
+    log.info('static dir: %s', STATIC_DIR);
+    log.info('database: %s', DB_PATH);
 
     if (LIBRARY_PATH) {
-      console.log(`[saavn-dl] Library path: ${LIBRARY_PATH} (Save to Library enabled)`);
+      log.info('library path: %s (Save to Library enabled)', LIBRARY_PATH);
     } else {
-      console.log(`[saavn-dl] SAAVN_LIBRARY_PATH not set — Save to Library disabled`);
+      log.info('SAAVN_LIBRARY_PATH not set — Save to Library disabled');
     }
 
     // Server-side download queue
     if (serverDownloadsEnabled) {
-      console.log(`[saavn-dl] Server-side downloads enabled (ffmpeg available)`);
+      log.info('server-side downloads enabled (ffmpeg available)');
       downloadWorker.start();
 
       // Periodic sweep of stale browser-delivery artifacts (Req 7.4).
       const sweep = () => {
         sweepArtifacts()
-          .then((n) => { if (n > 0) console.log(`[saavn-dl] Swept ${n} stale download artifact(s)`); })
+          .then((n) => { if (n > 0) log.info('swept %d stale download artifact(s)', n); })
           .catch(() => { /* ignore */ });
       };
       sweep();
       const sweepTimer = setInterval(sweep, 60 * 60 * 1000); // hourly
       if (sweepTimer.unref) sweepTimer.unref();
-      console.log(`[saavn-dl] Artifact TTL: ${ARTIFACT_TTL_SECONDS}s`);
+      log.debug('artifact TTL: %ds', ARTIFACT_TTL_SECONDS);
     } else if (!LIBRARY_PATH) {
-      console.log(`[saavn-dl] Server-side downloads disabled — SAAVN_LIBRARY_PATH not set`);
+      log.info('server-side downloads disabled — SAAVN_LIBRARY_PATH not set');
     } else {
-      console.log(
-        `[saavn-dl] Server-side downloads disabled — ffmpeg not available ` +
-        `(install ffmpeg-static or set SAAVN_FFMPEG_PATH). Client will use the in-browser pipeline.`,
+      log.info(
+        'server-side downloads disabled — ffmpeg not available ' +
+        '(install ffmpeg-static or set SAAVN_FFMPEG_PATH). Client will use the in-browser pipeline.',
       );
     }
 
     if (MUSIC_PATH) {
-      console.log(`[saavn-dl] Music path: ${MUSIC_PATH} (Sync to NAS enabled)`);
+      log.info('music path: %s (Sync to NAS enabled)', MUSIC_PATH);
       initScheduler();
       // Run file path backfill in background (populates file_path for existing tracks)
       backfillFilePaths(MUSIC_PATH).then(result => {
         if (result.matched > 0) {
-          console.log(`[saavn-dl] File path backfill: ${result.matched} matched, ${result.unmatched} unmatched of ${result.total} tracks`);
+          log.info('file path backfill: %d matched, %d unmatched of %d tracks', result.matched, result.unmatched, result.total);
         }
       }).catch(err => {
-        console.warn('[saavn-dl] File path backfill failed:', err.message);
+        log.warn('file path backfill failed:', err.message);
       });
     } else {
-      console.log(`[saavn-dl] SAAVN_MUSIC_PATH not set — Sync to NAS disabled`);
+      log.info('SAAVN_MUSIC_PATH not set — Sync to NAS disabled');
     }
   });
 }

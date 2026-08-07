@@ -9,6 +9,9 @@
  */
 
 import { getConfig } from './config';
+import { createLogger } from './logger';
+
+const log = createLogger('proxy');
 
 let forceProxy: boolean = false;
 
@@ -47,6 +50,16 @@ export async function proxyFetch(url: string, init?: RequestInit): Promise<Respo
       const fetchUrl = useProxy
         ? `/api/proxy?url=${encodeURIComponent(url)}`
         : url;
+
+      // Whether this request goes through the server proxy (VPN) or straight
+      // from the browser. This is the client-side answer to "did my download
+      // use the VPN?" — the server proxy logs the matching egress line.
+      log.debug(
+        '%s %s%s',
+        useProxy ? 'via proxy/VPN →' : 'direct →',
+        url,
+        attempt > 0 ? ` (retry ${attempt})` : '',
+      );
 
       const resp = await fetch(fetchUrl, init);
 

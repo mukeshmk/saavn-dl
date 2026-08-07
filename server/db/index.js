@@ -20,6 +20,9 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createLogger } from '../log.js';
+
+const log = createLogger('db');
 
 // ─── Database path ────────────────────────────────────────────────────────────
 
@@ -64,7 +67,7 @@ export function initDb() {
 
   createSchema(db);
 
-  console.log(`[db] SQLite initialized at: ${DB_PATH}`);
+  log.info('SQLite initialized at: %s', DB_PATH);
   return db;
 }
 
@@ -220,7 +223,7 @@ export function closeDb() {
   if (db) {
     db.close();
     db = null;
-    console.log('[db] SQLite connection closed');
+    log.info('SQLite connection closed');
   }
 }
 

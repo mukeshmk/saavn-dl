@@ -11,6 +11,9 @@ import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { URL } from 'node:url';
 import { isAllowedHost } from '../proxy.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('downloads/fetch');
 
 const MAX_REDIRECTS = 3;
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -63,6 +66,11 @@ export function fetchAllowed(targetUrlStr, { signal, _redirectCount = 0 } = {}) 
     }
 
     const requestFn = targetUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+
+    // Server-side download traffic egresses here — through the host network
+    // stack (the VPN when running behind gluetun), never the browser.
+    const startedAt = Date.now();
+    if (_redirectCount === 0) log.debug('→ fetch %s%s (via server)', targetUrl.hostname, targetUrl.pathname);
 
     const options = {
       hostname: targetUrl.hostname,
@@ -129,7 +137,11 @@ export function fetchAllowed(targetUrlStr, { signal, _redirectCount = 0 } = {}) 
         }
         chunks.push(chunk);
       });
-      resp.on('end', () => finish(resolvePromise, Buffer.concat(chunks)));
+      resp.on('end', () => {
+        const body = Buffer.concat(chunks);
+        log.debug('← fetch %s %d %db (%dms)', targetUrl.hostname, status, body.length, Date.now() - startedAt);
+        finish(resolvePromise, body);
+      });
       resp.on('error', (err) => finish(reject, new FetchError(`Upstream read failed: ${err.message}`, { status: 502 })));
     });
 

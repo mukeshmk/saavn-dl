@@ -7,6 +7,9 @@ import type { HomeFeedSection, DiscoverAlbum, DiscoverPlaylist } from '../../uti
 import { fetchPlaylistDetail } from '../../utils/playlist';
 import { fetchAlbumDetail } from '../../utils/album';
 import { proxyFetch } from '../../utils/proxy';
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('discover');
 
 interface Props {
   onPlaylistSelect: (playlist: PlaylistDetail) => void;
@@ -74,7 +77,7 @@ export default function DiscoverPage({
       const detail = await fetchPlaylistDetail(token);
       onPlaylistSelect(detail);
     } catch (err) {
-      console.error('Failed to load playlist:', err);
+      log.error('failed to load playlist:', err);
     } finally {
       setLoadingItem(null);
     }
@@ -83,7 +86,7 @@ export default function DiscoverPage({
   const handleAlbumClick = async (item: DiscoverAlbum) => {
     const url = item.perma_url || item.album_url || item.url;
     if (!url) {
-      console.warn('No URL for album:', item.title, item);
+      log.warn('no URL for album:', item.title, item);
       return;
     }
     setLoadingItem(item.id);
@@ -104,7 +107,7 @@ export default function DiscoverPage({
       const detail = await fetchAlbumDetail(url);
       onAlbumSelect(detail);
     } catch (err) {
-      console.error('Failed to load album:', err);
+      log.error('failed to load album:', err);
     } finally {
       setLoadingItem(null);
     }

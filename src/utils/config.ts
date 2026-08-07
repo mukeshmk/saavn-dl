@@ -13,6 +13,10 @@ export interface AppConfig {
   musicPathEnabled?: boolean;
   playlistsEnabled?: boolean;
   serverDownloadsEnabled?: boolean;
+  /** Active server log level (error|warn|info|debug); mirrored by the client logger. */
+  logLevel?: string;
+  /** True when the server is running in debug mode. */
+  debug?: boolean;
   [key: string]: unknown;
 }
 

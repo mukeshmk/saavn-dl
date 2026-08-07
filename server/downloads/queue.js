@@ -25,6 +25,9 @@ import {
   detectMultiArtist,
   buildAlbumFolder,
 } from './album.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('downloads/queue');
 
 const PROGRESS_EMIT_INTERVAL_MS = 500;
 
@@ -42,7 +45,7 @@ class DownloadWorker {
     if (this.started) return;
     this.started = true;
     const reset = store.resetDownloadingToQueued();
-    if (reset > 0) console.log(`[downloads/queue] restart recovery: reset ${reset} interrupted job(s) to queued`);
+    if (reset > 0) log.info('restart recovery: reset %d interrupted job(s) to queued', reset);
     this.emit();
     this.tick();
   }
@@ -51,7 +54,7 @@ class DownloadWorker {
     try {
       broadcast(store.getState());
     } catch (err) {
-      console.warn('[downloads/queue] broadcast failed:', err.message);
+      log.warn('broadcast failed:', err.message);
     }
   }
 
@@ -68,7 +71,7 @@ class DownloadWorker {
     if (!next) return;
     // Fire and forget; process() re-ticks in its finally.
     this.process(next).catch((err) => {
-      console.error('[downloads/queue] unexpected worker error:', err);
+      log.error('unexpected worker error:', err);
     });
   }
 
@@ -77,6 +80,7 @@ class DownloadWorker {
     this.activeController = new AbortController();
     const signal = this.activeController.signal;
 
+    log.info('job %s start: %s "%s" (%s)', job.id, job.type, job.title || job.artist || '—', job.mode || '');
     store.updateStatus(job.id, 'downloading', { stage: 'Starting…', progress: 0 });
     this.emit();
 
@@ -93,16 +97,19 @@ class DownloadWorker {
       }
 
       if (signal.aborted) {
+        log.info('job %s cancelled', job.id);
         store.updateStatus(job.id, 'cancelled', { stage: 'Cancelled' });
       } else {
+        log.info('job %s done', job.id);
         store.updateStatus(job.id, 'done', { stage: 'Done!', progress: 100 });
       }
     } catch (err) {
       if (signal.aborted) {
+        log.info('job %s cancelled', job.id);
         store.updateStatus(job.id, 'cancelled', { stage: 'Cancelled' });
       } else {
         const msg = err instanceof Error ? err.message : 'Download failed';
-        console.error(`[downloads/queue] job ${job.id} failed:`, msg);
+        log.error('job %s failed: %s', job.id, msg);
         store.updateStatus(job.id, 'failed', { stage: 'Failed', error: msg });
       }
     } finally {
@@ -304,6 +311,7 @@ class DownloadWorker {
 
   enqueueTrack(args) {
     const id = store.insertTrackJob(args);
+    log.info('enqueued track "%s" (%s, %skbps) as %s', args.song?.title || '—', args.mode || 'direct', args.quality, id);
     this.emit();
     this.tick();
     return id;
@@ -311,6 +319,7 @@ class DownloadWorker {
 
   enqueueAlbum(args) {
     const id = store.insertAlbumJob(args);
+    log.info('enqueued %s "%s" (%d tracks, %s) as %s', args.isPlaylist ? 'playlist' : 'album', args.album?.title || '—', args.album?.songs?.length || 0, args.mode || 'library', id);
     this.emit();
     this.tick();
     return id;

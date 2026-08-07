@@ -21,6 +21,9 @@ import { sanitizeFilename, sanitizePathSegment } from './decrypt.js';
 import { processTrack, writeToLibrary, getArtistTag } from './engine.js';
 import { recordTrack } from './recorder.js';
 import { getExistingTracks } from '../history/store.js';
+import { createLogger } from '../log.js';
+
+const log = createLogger('downloads/album');
 
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
@@ -404,7 +407,7 @@ export async function processPlaylistLibrary(album, quality, ctx) {
     try {
       await createPlaylistFile(album.title, playlistTracks);
     } catch (err) {
-      console.error('[downloads/album] playlist file creation failed:', err.message);
+      log.error('playlist file creation failed:', err.message);
     }
   }
 
