@@ -27,6 +27,7 @@ import { searchArtists, fetchArtistDetail } from './utils/artist';
 import { searchPlaylists, fetchPlaylistDetail } from './utils/playlist';
 import { getDownloadedIds } from './utils/history';
 import type { DownloadedIds } from './utils/history';
+import { getConfig } from './utils/config';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -108,10 +109,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/config').then(r => r.json()).then(data => {
-      if (data.musicPathEnabled) setMusicPathEnabled(true);
-      if (data.playlistsEnabled) setPlaylistsEnabled(true);
-    }).catch(() => { });
+    getConfig().then(cfg => {
+      if (cfg?.musicPathEnabled) setMusicPathEnabled(true);
+      if (cfg?.playlistsEnabled) setPlaylistsEnabled(true);
+    });
   }, []);
 
   // Load downloaded IDs for "already downloaded" badges

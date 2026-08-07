@@ -8,30 +8,18 @@
  * fail hard instead of falling back.
  */
 
-let proxyAvailable: boolean | null = null;
+import { getConfig } from './config';
+
 let forceProxy: boolean = false;
 
 /**
- * Check once whether the proxy endpoint exists and whether
- * force-proxy mode is enabled. Caches the result for the session.
+ * Whether the proxy endpoint exists (i.e. a server is present) and whether
+ * force-proxy mode is enabled. Backed by the shared, memoized app config.
  */
 async function isProxyAvailable(): Promise<boolean> {
-  if (proxyAvailable !== null) return proxyAvailable;
-
-  try {
-    const resp = await fetch('/api/config');
-    if (resp.ok) {
-      const data = await resp.json();
-      proxyAvailable = true;
-      forceProxy = !!data.forceProxy;
-    } else {
-      proxyAvailable = false;
-    }
-  } catch {
-    proxyAvailable = false;
-  }
-
-  return proxyAvailable;
+  const cfg = await getConfig();
+  forceProxy = !!cfg?.forceProxy;
+  return cfg !== null;
 }
 
 /**

@@ -5,6 +5,8 @@
  * falls back to localStorage for static deployments (Vercel).
  */
 
+import { getConfig } from './config';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface HistoryTrackEntry {
@@ -54,23 +56,9 @@ export interface DownloadedIds {
 
 // ─── Storage detection ────────────────────────────────────────────────────────
 
-let _serverAvailable: boolean | null = null;
-
 async function isServerAvailable(): Promise<boolean> {
-  if (_serverAvailable !== null) return _serverAvailable;
-
-  try {
-    const resp = await fetch('/api/config');
-    if (resp.ok) {
-      const data = await resp.json();
-      _serverAvailable = data.historyEnabled === true;
-    } else {
-      _serverAvailable = false;
-    }
-  } catch {
-    _serverAvailable = false;
-  }
-  return _serverAvailable;
+  const cfg = await getConfig();
+  return cfg?.historyEnabled === true;
 }
 
 // ─── localStorage fallback ────────────────────────────────────────────────────

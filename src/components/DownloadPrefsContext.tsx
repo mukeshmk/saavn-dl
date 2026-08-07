@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { getConfig } from '../utils/config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,17 +43,14 @@ export function DownloadPrefsProvider({ children }: { children: React.ReactNode 
 
   // Check if library is enabled on mount
   useEffect(() => {
-    fetch('/api/config')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.libraryEnabled) {
-          setLibraryEnabled(true);
-          // Default to library if available
-          setTrackAction('library');
-          setAlbumAction('library');
-        }
-      })
-      .catch(() => {});
+    getConfig().then((cfg) => {
+      if (cfg?.libraryEnabled) {
+        setLibraryEnabled(true);
+        // Default to library if available
+        setTrackAction('library');
+        setAlbumAction('library');
+      }
+    });
   }, []);
 
   const handleSetTrackAction = useCallback((action: TrackDownloadAction) => {
