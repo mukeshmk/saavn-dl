@@ -1,9 +1,11 @@
 import type { SaavnSong, AlbumDetail, Quality } from '../types/saavn';
+import { getSongArtist } from '../types/saavn';
 import type { TrackMetadata } from '../types/metadata';
 import { downloadWithMetadata } from './download';
 import { downloadAlbumIndividual, downloadAlbumZip, downloadAlbumLibrary, downloadPlaylistLibrary, detectMultiArtist } from './albumDownload';
 import type { AlbumDownloadMode, AlbumDownloadProgress } from './albumDownload';
 import { recordDownload } from './history';
+import { getConfig } from './config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,10 +120,7 @@ class InMemoryBackend implements QueueBackend {
     overrideMeta?: TrackMetadata,
     overrideFilename?: string,
   ): void {
-    const artist =
-      song.subtitle?.split(' - ')[0]?.trim() ||
-      song.more_info.artists?.primary?.[0]?.name ||
-      'Unknown Artist';
+    const artist = getSongArtist(song);
 
     const item: QueueTrackItem = {
       id: `track-${song.id}-${Date.now()}`,
@@ -416,10 +415,10 @@ class InMemoryBackend implements QueueBackend {
         return {
           saavnId: song.id,
           title: song.title,
-          artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '',
+          artist: getSongArtist(song),
           albumTitle: item.isPlaylist ? (song.more_info?.album || item.title) : item.title,
           albumArtist: item.isPlaylist
-            ? (song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || '')
+            ? getSongArtist(song)
             : (item.albumArtistOverride || item.artist),
           duration: song.more_info?.duration || '0',
           playCount: song.play_count || '0',
@@ -785,21 +784,14 @@ class QueueRouter implements QueueBackend {
   }
 
   private async detectServer(): Promise<void> {
-    try {
-      const resp = await fetch('/api/config');
-      if (!resp.ok) return;
-      const cfg = await resp.json();
-      if (cfg?.serverDownloadsEnabled) {
-        this.server = new ServerBackend();
-        this.serverReady = true;
-        this.server.subscribe((s) => {
-          this.serverState = s;
-          this.emit();
-        });
-      }
-    } catch {
-      /* no server (e.g. static deployment) → in-memory only */
-    }
+    const cfg = await getConfig();
+    if (!cfg?.serverDownloadsEnabled) return; // no server / feature off → in-memory only
+    this.server = new ServerBackend();
+    this.serverReady = true;
+    this.server.subscribe((s) => {
+      this.serverState = s;
+      this.emit();
+    });
   }
 
   subscribe(listener: QueueListener): () => void {

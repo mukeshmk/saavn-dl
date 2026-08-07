@@ -1,6 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { toBlobURL } from '@ffmpeg/util';
 import type { SaavnSong } from '../types/saavn';
+import { getSongArtist, getSongCoverUrl } from '../types/saavn';
 import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from './decrypt';
 import { proxyFetch } from './proxy';
 import type { TrackMetadata } from '../types/metadata';
@@ -48,28 +49,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-function getArtistTag(song: SaavnSong): string {
-  const fromSubtitle = song.subtitle
-    ?.split(' - ')[0]
-    ?.trim();
-
-  if (fromSubtitle) {
-    return fromSubtitle;
-  }
-
-  const fromPrimary = song.more_info.artists?.primary
-    ?.map((a) => a.name)
-    .join(', ');
-
-  return fromPrimary || 'Unknown Artist';
-}
-
-function getImageUrl(song: SaavnSong): string {
-  return song.image
-    .replace(/\d+x\d+/, '500x500')
-    .replace('http://', 'https://');
-}
-
 function validateOutput(data: Uint8Array | string, label: string): Uint8Array {
   if (typeof data === 'string') throw new Error(`${label}: got string instead of bytes`);
   if (data.byteLength < 1024) throw new Error(`${label}: output too small (${data.byteLength} bytes) — likely empty`);
@@ -81,7 +60,7 @@ function toArrayBuffer(data: Uint8Array): ArrayBuffer {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -89,7 +68,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 15_000);
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 async function safeDeleteFile(ff: FFmpeg, path: string): Promise<void> {
@@ -124,49 +103,69 @@ async function runFFmpeg(
   return validateOutput(raw, outputFile);
 }
 
+// ─── Metadata ──────────────────────────────────────────────────────────────
+
+interface EmbedMeta {
+  title: string;
+  artist: string;
+  albumArtist: string;
+  album: string;
+  year: string;
+  publisher: string;
+  copyright: string;
+}
+
+/** ffmpeg `-metadata` args shared by both embed strategies. */
+function metadataArgs(meta: EmbedMeta): string[] {
+  const args = [
+    '-metadata', `title=${meta.title}`,
+    '-metadata', `artist=${meta.artist}`,
+    '-metadata', `album_artist=${meta.albumArtist}`,
+    '-metadata', `album=${meta.album}`,
+    '-metadata', `date=${meta.year}`,
+  ];
+  if (meta.publisher) args.push('-metadata', `publisher=${meta.publisher}`);
+  if (meta.copyright) args.push('-metadata', `copyright=${meta.copyright}`);
+  return args;
+}
+
 // ─── Strategy A: metadata + cover art ─────────────────────────────────────────
+// `scope` uniquely names the virtual-FS temp files so batched callers (albums)
+// don't collide inside ffmpeg's in-memory filesystem.
 
 async function embedWithCover(
   ff: FFmpeg,
   audioData: Uint8Array,
   coverData: Uint8Array,
-  meta: {
-    title: string;
-    artist: string;
-    albumArtist: string;
-    album: string;
-    year: string;
-    publisher: string;
-    copyright: string;
-  },
+  meta: EmbedMeta,
+  scope: string,
 ): Promise<Uint8Array> {
-  await ff.writeFile('in.mp4', audioData);
-  await ff.writeFile('cover.jpg', coverData);
+  const inF = `in${scope}.mp4`;
+  const covF = `cover${scope}.jpg`;
+  const outF = `out${scope}.mp4`;
+
+  await ff.writeFile(inF, audioData);
+  await ff.writeFile(covF, coverData);
 
   // For MP4/M4A containers the safest cover-art embed is:
   // map audio from input 0, map video (cover) from input 1,
   // copy both streams, tag the video as attached_pic.
   // We avoid re-encoding (-c:v copy) because the cover is already JPEG.
   const args = [
-    '-i', 'in.mp4',
-    '-i', 'cover.jpg',
+    '-i', inF,
+    '-i', covF,
     '-map', '0:a:0',
     '-map', '1:v:0',
     '-c:a', 'copy',
     '-c:v', 'copy',
     '-disposition:v:0', 'attached_pic',
-    '-metadata', `title=${meta.title}`,
-    '-metadata', `artist=${meta.artist}`,
-    '-metadata', `album=${meta.album}`,
-    '-metadata', `date=${meta.year}`,
-    '-metadata', `publisher=${meta.publisher}`,
-    '-metadata', `copyright=${meta.copyright}`,
+    ...metadataArgs(meta),
     '-movflags', '+faststart',
-    'out.mp4',
+    outF,
   ];
 
   // Cover embedding can be slow — give it 90s
-  return runFFmpeg(ff, args, ['in.mp4', 'cover.jpg'], 'out.mp4', 90_000);
+  return runFFmpeg(ff, args, [inF, covF], outF, 90_000);
 }
 
 // ─── Strategy B: metadata only (no cover) ─────────────────────────────────────
@@ -174,32 +173,23 @@ async function embedWithCover(
 async function embedMetaOnly(
   ff: FFmpeg,
   audioData: Uint8Array,
-  meta: {
-    title: string;
-    artist: string;
-    albumArtist: string;
-    album: string;
-    year: string;
-    publisher: string;
-    copyright: string;
-  },
+  meta: EmbedMeta,
+  scope: string,
 ): Promise<Uint8Array> {
-  await ff.writeFile('in.mp4', audioData);
+  const inF = `in${scope}.mp4`;
+  const outF = `outmeta${scope}.mp4`;
+
+  await ff.writeFile(inF, audioData);
 
   const args = [
-    '-i', 'in.mp4',
+    '-i', inF,
     '-c', 'copy',
-    '-metadata', `title=${meta.title}`,
-    '-metadata', `artist=${meta.artist}`,
-    '-metadata', `album=${meta.album}`,
-    '-metadata', `date=${meta.year}`,
-    '-metadata', `publisher=${meta.publisher}`,
-    '-metadata', `copyright=${meta.copyright}`,
+    ...metadataArgs(meta),
     '-movflags', '+faststart',
-    'out_meta.mp4',
+    outF,
   ];
 
-  return runFFmpeg(ff, args, ['in.mp4'], 'out_meta.mp4', 45_000);
+  return runFFmpeg(ff, args, [inF], outF, 45_000);
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -212,8 +202,23 @@ export interface DownloadOptions {
   overrideFilename?: string;
 }
 
-export async function downloadWithMetadata(opts: DownloadOptions): Promise<void> {
-  const { song, quality, onProgress, overrideMeta, overrideFilename } = opts;
+export interface TrackBlobOptions {
+  quality: string;
+  onProgress?: (stage: string, percent: number) => void;
+  overrideMeta?: TrackMetadata;
+  /** Album Artist tag override (Navidrome multi-artist fix). */
+  albumArtistOverride?: string;
+  /** Unique suffix for ffmpeg temp files (album batches process many in a row). */
+  scope?: string;
+}
+
+/**
+ * Core single-track pipeline: decrypt → fetch audio + cover → embed metadata
+ * with ffmpeg → return the finished M4A as a Blob (no browser download).
+ * Shared by single-track downloads, album batches, and library saves.
+ */
+export async function trackToBlob(song: SaavnSong, opts: TrackBlobOptions): Promise<Blob> {
+  const { quality, onProgress, overrideMeta, albumArtistOverride, scope = '' } = opts;
   const { more_info } = song;
 
   onProgress?.('Decrypting URL…', 8);
@@ -229,7 +234,7 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   onProgress?.('Fetching cover art…', 32);
   let coverData: Uint8Array | null = null;
   try {
-    const imgResp = await proxyFetch(getImageUrl(song));
+    const imgResp = await proxyFetch(getSongCoverUrl(song));
     if (imgResp.ok) {
       const imgBlob = await imgResp.blob();
       if (imgBlob.size > 500) {
@@ -244,78 +249,63 @@ export async function downloadWithMetadata(opts: DownloadOptions): Promise<void>
   const ff = await getFFmpeg();
 
   const audioData = new Uint8Array(await audioBlob.arrayBuffer());
-  const artist = getArtistTag(song);
-  const meta = overrideMeta
-    ? {
-      title: overrideMeta.title,
-      artist: overrideMeta.artist,
-      albumArtist: overrideMeta.albumArtist,
-      album: overrideMeta.album,
-      year: overrideMeta.year,
-      publisher: more_info.label,
-      copyright: overrideMeta.copyright,
-      comment: overrideMeta.comment,
-      genre: overrideMeta.genre,
-      trackNumber: overrideMeta.trackNumber,
-      discNumber: overrideMeta.discNumber,
-      composer: overrideMeta.composer,
-    }
-    : {
-      title: song.title,
-      artist,
-      albumArtist: artist,
-      album: more_info.album,
-      year: song.year,
-      publisher: more_info.label,
-      copyright: more_info.copyright_text,
-      genre: '',
-      trackNumber: '',
-      discNumber: '',
-      composer: '',
-    };
+  const artist = overrideMeta?.artist ?? getSongArtist(song);
+  const meta: EmbedMeta = {
+    title: overrideMeta?.title ?? song.title,
+    artist,
+    albumArtist: albumArtistOverride ?? overrideMeta?.albumArtist ?? artist,
+    album: overrideMeta?.album ?? more_info.album,
+    year: overrideMeta?.year ?? song.year,
+    publisher: more_info.label,
+    copyright: overrideMeta?.copyright ?? more_info.copyright_text,
+  };
 
   let outputData: Uint8Array;
-  let usedCover = false;
 
   if (coverData) {
     onProgress?.('Embedding cover + metadata…', 62);
     try {
-      outputData = await embedWithCover(ff, audioData, coverData, meta);
-      usedCover = true;
+      outputData = await embedWithCover(ff, audioData, coverData, meta, scope);
     } catch (err) {
       // Cover embedding failed — retry without cover
       console.warn('[saavn-dl] Cover embed failed, retrying without cover:', err);
       onProgress?.('Cover failed, embedding metadata only…', 72);
-      outputData = await embedMetaOnly(ff, audioData, meta);
+      outputData = await embedMetaOnly(ff, audioData, meta, scope);
     }
   } else {
     onProgress?.('Embedding metadata…', 62);
-    outputData = await embedMetaOnly(ff, audioData, meta);
+    outputData = await embedMetaOnly(ff, audioData, meta, scope);
   }
 
-  onProgress?.('Preparing download…', 92);
-  const buf = toArrayBuffer(outputData);
-  const finalBlob = new Blob([buf], { type: 'audio/mp4' });
+  onProgress?.('Preparing…', 92);
+  return new Blob([toArrayBuffer(outputData)], { type: 'audio/mp4' });
+}
 
-  console.info(
-    `[saavn-dl] Final: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB` +
-    ` | cover=${usedCover} | quality=${quality}kbps`
-  );
+/** Fetch the raw audio stream as a Blob with no ffmpeg processing / metadata. */
+export async function trackToBlobDirect(song: SaavnSong, quality: string): Promise<Blob> {
+  const decrypted = decryptMediaUrl(song.more_info.encrypted_media_url);
+  const audioUrl = getQualityUrl(decrypted, quality);
+  const resp = await proxyFetch(audioUrl);
+  if (!resp.ok) throw new Error(`Audio fetch failed: HTTP ${resp.status}`);
+  const blob = await resp.blob();
+  if (blob.size < 1024) throw new Error('Received empty file');
+  return blob;
+}
 
-  const filename = sanitizeFilename(overrideFilename ?? `${meta.title} - ${meta.artist}`) + '.m4a';
-  triggerDownload(finalBlob, filename);
+export async function downloadWithMetadata(opts: DownloadOptions): Promise<void> {
+  const { song, quality, onProgress, overrideMeta, overrideFilename } = opts;
+  const blob = await trackToBlob(song, { quality, onProgress, overrideMeta });
+
+  const title = overrideMeta?.title ?? song.title;
+  const artist = overrideMeta?.artist ?? getSongArtist(song);
+  const filename = sanitizeFilename(overrideFilename ?? `${title} - ${artist}`) + '.m4a';
+  triggerDownload(blob, filename);
   onProgress?.('Done!', 100);
 }
 
-export async function downloadDirect(song: SaavnSong, quality: string, overrideFilename?: string,): Promise<void> {
-  const { more_info } = song;
-  const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
-  const audioUrl = getQualityUrl(decrypted, quality);
-  const artist = getArtistTag(song);
+export async function downloadDirect(song: SaavnSong, quality: string, overrideFilename?: string): Promise<void> {
+  const artist = getSongArtist(song);
   const filename = sanitizeFilename(overrideFilename ?? `${song.title} - ${artist}`) + '.m4a';
-  const resp = await proxyFetch(audioUrl);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const blob = await resp.blob();
-  if (blob.size < 1024) throw new Error('Received empty file');
+  const blob = await trackToBlobDirect(song, quality);
   triggerDownload(blob, filename);
 }

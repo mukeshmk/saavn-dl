@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SaavnSong, Quality } from '../types/saavn';
+import { getSongArtist } from '../types/saavn';
 import type { TrackMetadata } from '../types/metadata';
-import { downloadWithMetadata, downloadDirect } from '../utils/download';
+import { downloadWithMetadata, downloadDirect, trackToBlob, trackToBlobDirect } from '../utils/download';
 import { useDownloadQueue } from './DownloadQueueContext';
 import { useDownloadPrefs } from './DownloadPrefsContext';
 import type { TrackDownloadAction } from './DownloadPrefsContext';
@@ -149,23 +150,27 @@ export default function DownloadAction({
         // Download with metadata processing, then save to library
         if (embedMeta) {
           // We need the blob, not a browser download
-          const blob = await downloadToBlob(song, quality, overrideMeta, overrideFilename, (s, p) => {
-            setStage(s);
-            setPercent(p);
+          const blob = await trackToBlob(song, {
+            quality,
+            overrideMeta,
+            onProgress: (s, p) => {
+              setStage(s);
+              setPercent(p);
+            },
           });
           setStage('Saving to library…');
           setPercent(92);
-          const artist = getArtistForFilename(song);
+          const artist = getSongArtist(song);
           const filename = (overrideFilename ?? `${song.title} - ${artist}`) + '.m4a';
           savedPath = await saveTrackToLibrary(blob, song, sanitizeFilenameLocal(filename));
         } else {
           // Direct download blob → library
           setStage('Fetching audio…');
           setPercent(30);
-          const blob = await downloadDirectToBlob(song, quality);
+          const blob = await trackToBlobDirect(song, quality);
           setStage('Saving to library…');
           setPercent(80);
-          const artist = getArtistForFilename(song);
+          const artist = getSongArtist(song);
           const filename = (overrideFilename ?? `${song.title} - ${artist}`) + '.m4a';
           savedPath = await saveTrackToLibrary(blob, song, sanitizeFilenameLocal(filename));
         }
@@ -198,7 +203,7 @@ export default function DownloadAction({
         saavnId: song.id,
         type: 'track',
         title: song.title,
-        artist: song.subtitle?.split(' - ')[0]?.trim() || song.more_info?.artists?.primary?.[0]?.name || 'Unknown Artist',
+        artist: getSongArtist(song),
         album: song.more_info?.album || '',
         image: song.image || '',
         quality,
@@ -433,163 +438,8 @@ function DropdownItem({
 
 // ─── Helpers (for library save) ───────────────────────────────────────────────
 
-import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from '../utils/decrypt';
-import { proxyFetch } from '../utils/proxy';
-import { getFFmpeg } from '../utils/download';
+import { sanitizeFilename } from '../utils/decrypt';
 
 function sanitizeFilenameLocal(name: string): string {
   return sanitizeFilename(name.replace(/\.m4a$/, '')) + '.m4a';
-}
-
-function getArtistForFilename(song: SaavnSong): string {
-  return song.subtitle?.split(' - ')[0]?.trim()
-    || song.more_info?.artists?.primary?.[0]?.name
-    || 'Unknown Artist';
-}
-
-/**
- * Download and process a track to a Blob (with metadata) without triggering browser download.
- * Reuses the same ffmpeg logic as downloadWithMetadata but returns the blob.
- */
-async function downloadToBlob(
-  song: SaavnSong,
-  quality: string,
-  overrideMeta?: TrackMetadata,
-  overrideFilename?: string,
-  onProgress?: (stage: string, percent: number) => void,
-): Promise<Blob> {
-  const { more_info } = song;
-
-  onProgress?.('Decrypting URL…', 8);
-  const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
-  const audioUrl = getQualityUrl(decrypted, quality);
-
-  onProgress?.('Fetching audio…', 18);
-  const audioResp = await proxyFetch(audioUrl);
-  if (!audioResp.ok) throw new Error(`Audio fetch failed: HTTP ${audioResp.status}`);
-  const audioBlob = await audioResp.blob();
-  if (audioBlob.size < 1024) throw new Error('Audio response is empty — URL may have expired');
-
-  onProgress?.('Fetching cover art…', 32);
-  let coverData: Uint8Array | null = null;
-  try {
-    const imgUrl = song.image.replace(/\d+x\d+/, '500x500').replace('http://', 'https://');
-    const imgResp = await proxyFetch(imgUrl);
-    if (imgResp.ok) {
-      const imgBlob = await imgResp.blob();
-      if (imgBlob.size > 500) {
-        coverData = new Uint8Array(await imgBlob.arrayBuffer());
-      }
-    }
-  } catch { /* cover is optional */ }
-
-  onProgress?.('Loading ffmpeg…', 48);
-  const ff = await getFFmpeg();
-
-  const audioData = new Uint8Array(await audioBlob.arrayBuffer());
-  const artist = getArtistForFilename(song);
-
-  const meta = overrideMeta
-    ? {
-      title: overrideMeta.title,
-      artist: overrideMeta.artist,
-      albumArtist: overrideMeta.albumArtist,
-      album: overrideMeta.album,
-      year: overrideMeta.year,
-      publisher: more_info.label,
-      copyright: overrideMeta.copyright,
-    }
-    : {
-      title: song.title,
-      artist,
-      albumArtist: artist,
-      album: more_info.album,
-      year: song.year,
-      publisher: more_info.label,
-      copyright: more_info.copyright_text,
-    };
-
-  let outputData: Uint8Array;
-
-  if (coverData) {
-    onProgress?.('Embedding cover + metadata…', 62);
-    try {
-      // Embed with cover
-      await ff.writeFile('in.mp4', audioData);
-      await ff.writeFile('cover.jpg', coverData);
-      await ff.exec([
-        '-i', 'in.mp4', '-i', 'cover.jpg',
-        '-map', '0:a:0', '-map', '1:v:0',
-        '-c:a', 'copy', '-c:v', 'copy',
-        '-disposition:v:0', 'attached_pic',
-        '-metadata', `title=${meta.title}`,
-        '-metadata', `artist=${meta.artist}`,
-        '-metadata', `album_artist=${meta.albumArtist}`,
-        '-metadata', `album=${meta.album}`,
-        '-metadata', `date=${meta.year}`,
-        '-metadata', `publisher=${meta.publisher}`,
-        '-metadata', `copyright=${meta.copyright}`,
-        '-movflags', '+faststart',
-        'out.mp4',
-      ]);
-      const raw = await ff.readFile('out.mp4') as Uint8Array;
-      outputData = raw;
-      try { await ff.deleteFile('in.mp4'); } catch { }
-      try { await ff.deleteFile('cover.jpg'); } catch { }
-      try { await ff.deleteFile('out.mp4'); } catch { }
-    } catch {
-      onProgress?.('Cover failed, metadata only…', 72);
-      await ff.writeFile('in.mp4', audioData);
-      await ff.exec([
-        '-i', 'in.mp4', '-c', 'copy',
-        '-metadata', `title=${meta.title}`,
-        '-metadata', `artist=${meta.artist}`,
-        '-metadata', `album_artist=${meta.albumArtist}`,
-        '-metadata', `album=${meta.album}`,
-        '-metadata', `date=${meta.year}`,
-        '-metadata', `publisher=${meta.publisher}`,
-        '-metadata', `copyright=${meta.copyright}`,
-        '-movflags', '+faststart',
-        'out_meta.mp4',
-      ]);
-      const raw = await ff.readFile('out_meta.mp4') as Uint8Array;
-      outputData = raw;
-      try { await ff.deleteFile('in.mp4'); } catch { }
-      try { await ff.deleteFile('out_meta.mp4'); } catch { }
-    }
-  } else {
-    onProgress?.('Embedding metadata…', 62);
-    await ff.writeFile('in.mp4', audioData);
-    await ff.exec([
-      '-i', 'in.mp4', '-c', 'copy',
-      '-metadata', `title=${meta.title}`,
-      '-metadata', `artist=${meta.artist}`,
-      '-metadata', `album_artist=${meta.albumArtist}`,
-      '-metadata', `album=${meta.album}`,
-      '-metadata', `date=${meta.year}`,
-      '-metadata', `publisher=${meta.publisher}`,
-      '-metadata', `copyright=${meta.copyright}`,
-      '-movflags', '+faststart',
-      'out_meta.mp4',
-    ]);
-    const raw = await ff.readFile('out_meta.mp4') as Uint8Array;
-    outputData = raw;
-    try { await ff.deleteFile('in.mp4'); } catch { }
-    try { await ff.deleteFile('out_meta.mp4'); } catch { }
-  }
-
-  onProgress?.('Done!', 100);
-  const buf = outputData.buffer.slice(outputData.byteOffset, outputData.byteOffset + outputData.byteLength) as ArrayBuffer;
-  return new Blob([buf], { type: 'audio/mp4' });
-}
-
-/**
- * Download audio directly (no metadata) and return as blob.
- */
-async function downloadDirectToBlob(song: SaavnSong, quality: string): Promise<Blob> {
-  const decrypted = decryptMediaUrl(song.more_info.encrypted_media_url);
-  const audioUrl = getQualityUrl(decrypted, quality);
-  const resp = await proxyFetch(audioUrl);
-  if (!resp.ok) throw new Error(`Audio fetch failed: HTTP ${resp.status}`);
-  return resp.blob();
 }

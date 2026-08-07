@@ -1,11 +1,24 @@
 import JSZip from 'jszip';
 import type { SaavnSong, AlbumDetail } from '../types/saavn';
+import { getSongArtist } from '../types/saavn';
 import { sanitizeFilename } from './decrypt';
-import { getFFmpeg } from './download';
-import { decryptMediaUrl, getQualityUrl } from './decrypt';
+import { trackToBlob, triggerDownload } from './download';
 import { proxyFetch } from './proxy';
 import { recordDownload } from './history';
-import type { FFmpeg } from '@ffmpeg/ffmpeg';
+import { getConfig } from './config';
+
+// ─── Naming helpers (single source for on-disk folder + file names) ───────────
+
+/** Album folder: "Title (Year)" — the "(Year)" suffix is omitted when year is empty. */
+function albumFolderName(title: string, year: string): string {
+  return `${sanitizeFilename(title)}${year ? ` (${year})` : ''}`;
+}
+
+/** Track filename: "NN - Title - Artist.m4a"; the number prefix is omitted when trackNumber is undefined. */
+function trackFileName(title: string, artist: string, trackNumber?: number): string {
+  const prefix = trackNumber != null ? `${String(trackNumber).padStart(2, '0')} - ` : '';
+  return `${prefix}${sanitizeFilename(title)} - ${sanitizeFilename(artist)}.m4a`;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,11 +87,11 @@ export function detectMultiArtist(album: AlbumDetail): MultiArtistInfo {
   const artistSet = new Set<string>();
 
   for (const song of album.songs) {
-    const artist = getArtistT(song).toLowerCase().trim();
+    const artist = getSongArtist(song).toLowerCase().trim();
     artistSet.add(artist);
   }
 
-  const uniqueArtists = [...new Set(album.songs.map(s => getArtistT(s)))];
+  const uniqueArtists = [...new Set(album.songs.map(s => getSongArtist(s)))];
   const isMultiArtist = artistSet.size > 1;
 
   // Suggest unified Album Artist
@@ -95,172 +108,40 @@ export function detectMultiArtist(album: AlbumDetail): MultiArtistInfo {
   return { isMultiArtist, uniqueArtists, suggestedAlbumArtist };
 }
 
-// ─── Trigger ──────────────────────────────────────────────────────────────────
-
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
-
-// ─── Internal ffmpeg helpers (per-track; avoid circular imports) ──────────────
-
-function withTimeoutT<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<never>((_, rej) =>
-      setTimeout(() => rej(new Error(`${label} timed out after ${ms / 1000}s`)), ms),
-    ),
-  ]);
-}
-
-async function safeDeleteT(ff: FFmpeg, files: string[]): Promise<void> {
-  for (const f of files) {
-    try { await ff.deleteFile(f); } catch { /* ok */ }
-  }
-}
-
-function validateT(data: Uint8Array | string, label: string): Uint8Array {
-  if (typeof data === 'string') throw new Error(`${label}: string output`);
-  if (data.byteLength < 1024) throw new Error(`${label}: output too small (${data.byteLength}B)`);
-  return data;
-}
-
-function getArtistT(song: SaavnSong): string {
-  return (
-    song.subtitle?.split(' - ')[0]?.trim() ||
-    song.more_info.artists?.primary?.[0]?.name ||
-    'Unknown Artist'
-  );
-}
-
-function getImageUrlT(song: SaavnSong): string {
-  return song.image.replace(/\d+x\d+/, '500x500').replace('http://', 'https://');
-}
+// ─── Shared per-track retry policy ────────────────────────────────────────────
 
 /**
- * Download a single track and return it as a Blob (no browser download triggered).
- * Reuses the same ffmpeg singleton and embed strategies as `downloadWithMetadata`.
+ * Run `work` for track `i` with the standard retry policy shared by every
+ * album/playlist mode: on failure ask `onFailure` — 'skip' marks the track
+ * skipped, 'retry' re-runs it (max 2 attempts, then marks it failed).
+ * `work` owns the success path (it sets tracks[i] to 'done').
  */
-async function trackToBlob(
+async function runTrackWithRetry(
+  i: number,
   song: SaavnSong,
-  quality: string,
-  onProgress: (stage: string, pct: number) => void,
-  albumArtistOverride?: string,
-): Promise<Blob> {
-  const { more_info } = song;
-
-  onProgress('Decrypting…', 8);
-  const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
-  const audioUrl = getQualityUrl(decrypted, quality);
-
-  onProgress('Fetching audio…', 20);
-  const audioResp = await proxyFetch(audioUrl);
-  if (!audioResp.ok) throw new Error(`Audio fetch failed: HTTP ${audioResp.status}`);
-  const audioBlob = await audioResp.blob();
-  if (audioBlob.size < 1024) throw new Error('Audio response is empty — URL may have expired');
-
-  onProgress('Fetching cover…', 35);
-  let coverData: Uint8Array | null = null;
-  try {
-    const imgResp = await proxyFetch(getImageUrlT(song));
-    if (imgResp.ok) {
-      const imgBlob = await imgResp.blob();
-      if (imgBlob.size > 500) coverData = new Uint8Array(await imgBlob.arrayBuffer());
-    }
-  } catch { /* cover is optional */ }
-
-  onProgress('Loading ffmpeg…', 50);
-  const ff = await getFFmpeg();
-
-  const audioData = new Uint8Array(await audioBlob.arrayBuffer());
-  const artist = getArtistT(song);
-  const meta = { title: song.title, artist, album: more_info.album, year: song.year };
-
-  // Determine album_artist: use override if provided, otherwise fall back to track artist
-  const albumArtist = albumArtistOverride || artist;
-
-  // Use song-id-scoped filenames so sequential calls don't collide inside wasm fs
-  const inF = `in_${song.id}.mp4`;
-  const outF = `out_${song.id}.mp4`;
-  const covF = `cov_${song.id}.jpg`;
-
-  await ff.writeFile(inF, audioData);
-
-  let outputData: Uint8Array;
-
-  if (coverData) {
-    onProgress('Embedding cover + metadata…', 65);
-    await ff.writeFile(covF, coverData);
-
-    const args = [
-      '-i', inF, '-i', covF,
-      '-map', '0:a:0', '-map', '1:v:0',
-      '-c:a', 'copy', '-c:v', 'copy',
-      '-disposition:v:0', 'attached_pic',
-      '-metadata', `title=${meta.title}`,
-      '-metadata', `artist=${meta.artist}`,
-      '-metadata', `album_artist=${albumArtist}`,
-      '-metadata', `album=${meta.album}`,
-      '-metadata', `date=${meta.year}`,
-      '-movflags', '+faststart',
-      outF,
-    ];
-
+  tracks: TrackStatus[],
+  onFailure: FailureCallback,
+  work: () => Promise<void>,
+): Promise<void> {
+  let attempt = 0;
+  while (attempt < 2) {
     try {
-      await withTimeoutT(ff.exec(args), 90_000, 'embed+cover');
-      const raw = await ff.readFile(outF) as Uint8Array;
-      await safeDeleteT(ff, [inF, covF, outF]);
-      outputData = validateT(raw, outF);
+      await work();
+      return;
     } catch (err) {
-      console.warn('[album-dl] Cover embed failed, retrying without cover:', err);
-      onProgress('Retrying without cover…', 72);
-      await safeDeleteT(ff, [covF, outF]);
-      // meta-only fallback
-      const metaArgs = [
-        '-i', inF, '-c', 'copy',
-        '-metadata', `title=${meta.title}`,
-        '-metadata', `artist=${meta.artist}`,
-        '-metadata', `album_artist=${albumArtist}`,
-        '-metadata', `album=${meta.album}`,
-        '-metadata', `date=${meta.year}`,
-        '-movflags', '+faststart',
-        outF,
-      ];
-      await withTimeoutT(ff.exec(metaArgs), 45_000, 'meta-only');
-      const raw = await ff.readFile(outF) as Uint8Array;
-      await safeDeleteT(ff, [inF, outF]);
-      outputData = validateT(raw, outF);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const action = await onFailure(i, song, msg);
+      if (action === 'skip') {
+        tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
+        return;
+      }
+      attempt++;
+      if (attempt >= 2) {
+        tracks[i] = { ...tracks[i], status: 'failed', error: msg };
+        return;
+      }
     }
-  } else {
-    onProgress('Embedding metadata…', 65);
-    const metaArgs = [
-      '-i', inF, '-c', 'copy',
-      '-metadata', `title=${meta.title}`,
-      '-metadata', `artist=${meta.artist}`,
-      '-metadata', `album_artist=${albumArtist}`,
-      '-metadata', `album=${meta.album}`,
-      '-metadata', `date=${meta.year}`,
-      '-movflags', '+faststart',
-      outF,
-    ];
-    await withTimeoutT(ff.exec(metaArgs), 45_000, 'meta-only');
-    const raw = await ff.readFile(outF) as Uint8Array;
-    await safeDeleteT(ff, [inF, outF]);
-    outputData = validateT(raw, outF);
   }
-
-  onProgress('Done', 95);
-  const buf = outputData.buffer.slice(
-    outputData.byteOffset,
-    outputData.byteOffset + outputData.byteLength,
-  ) as ArrayBuffer;
-  return new Blob([buf], { type: 'audio/mp4' });
 }
 
 // ─── Individual mode ──────────────────────────────────────────────────────────
@@ -282,44 +163,22 @@ export async function downloadAlbumIndividual(
     tracks[i] = { ...tracks[i], status: 'downloading' };
     emit(i, 'Starting…', Math.round((i / songs.length) * 100));
 
-    let attempt = 0;
-    let resolved = false;
-
-    while (!resolved && attempt < 2) {
-      try {
-        // Use downloadWithMetadata but wrapped to trigger individual file download
-        const blob = await trackToBlob(songs[i], quality, (stage, p) => {
+    await runTrackWithRetry(i, songs[i], tracks, onFailure, async () => {
+      const blob = await trackToBlob(songs[i], {
+        quality,
+        albumArtistOverride,
+        scope: songs[i].id,
+        onProgress: (stage, p) => {
           tracks[i] = { ...tracks[i], status: 'downloading' };
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 100));
-        }, albumArtistOverride);
-        // Trigger individual download
-        const artistName = getArtistT(songs[i]);
-        const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
-        triggerDownload(blob, filename);
-        tracks[i] = { ...tracks[i], status: 'done' };
-        resolved = true;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        if (attempt === 0) {
-          const action = await onFailure(i, songs[i], msg);
-          if (action === 'skip') {
-            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-            resolved = true;
-          } else {
-            attempt++;
-          }
-        } else {
-          // Second attempt also failed — ask again
-          const action = await onFailure(i, songs[i], msg);
-          if (action === 'skip') {
-            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-          } else {
-            tracks[i] = { ...tracks[i], status: 'failed', error: msg };
-          }
-          resolved = true;
-        }
-      }
-    }
+        },
+      });
+      // Trigger individual download
+      const artistName = getSongArtist(songs[i]);
+      const filename = trackFileName(songs[i].title, artistName, i + 1);
+      triggerDownload(blob, filename);
+      tracks[i] = { ...tracks[i], status: 'done' };
+    });
   }
 
   onProgress({ current: songs.length, total: songs.length, currentTitle: '', stage: 'Done!', percent: 100, tracks: [...tracks] });
@@ -355,34 +214,20 @@ export async function downloadAlbumZip(
     tracks[i] = { ...tracks[i], status: 'downloading' };
     emit(i, 'Starting…', Math.round((i / songs.length) * 88));
 
-    let resolved = false;
-    let attempt = 0;
-
-    while (!resolved && attempt < 2) {
-      try {
-        const blob = await trackToBlob(songs[i], quality, (stage, p) => {
+    await runTrackWithRetry(i, songs[i], tracks, onFailure, async () => {
+      const blob = await trackToBlob(songs[i], {
+        quality,
+        albumArtistOverride,
+        scope: songs[i].id,
+        onProgress: (stage, p) => {
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 88));
-        }, albumArtistOverride);
-        const artistName = getArtistT(songs[i]);
-        const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
-        completed.push({ filename, blob });
-        tracks[i] = { ...tracks[i], status: 'done' };
-        resolved = true;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        const action = await onFailure(i, songs[i], msg);
-        if (action === 'skip') {
-          tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-          resolved = true;
-        } else {
-          attempt++;
-          if (attempt >= 2) {
-            tracks[i] = { ...tracks[i], status: 'failed', error: msg };
-            resolved = true;
-          }
-        }
-      }
-    }
+        },
+      });
+      const artistName = getSongArtist(songs[i]);
+      const filename = trackFileName(songs[i].title, artistName, i + 1);
+      completed.push({ filename, blob });
+      tracks[i] = { ...tracks[i], status: 'done' };
+    });
   }
 
   // ── Phase 2: build ZIP ────────────────────────────────────────────────────
@@ -390,7 +235,7 @@ export async function downloadAlbumZip(
   emit(songs.length - 1, 'Building ZIP…', 89, 'compressing');
 
   const zip = new JSZip();
-  const folder = zip.folder(sanitizeFilename(`${album.title} (${album.year})`))!;
+  const folder = zip.folder(albumFolderName(album.title, album.year))!;
   for (const { filename, blob } of completed) folder.file(filename, blob);
 
   const zipBlob = await zip.generateAsync(
@@ -403,7 +248,7 @@ export async function downloadAlbumZip(
   // Release track blobs from memory
   completed.length = 0;
 
-  const zipFilename = `${sanitizeFilename(album.title)} (${album.year}).zip`;
+  const zipFilename = `${albumFolderName(album.title, album.year)}.zip`;
   triggerDownload(zipBlob, zipFilename);
 
   onProgress({
@@ -420,14 +265,8 @@ export async function downloadAlbumZip(
 // ─── Library mode (save to server) ───────────────────────────────────────────
 
 export async function checkLibraryEnabled(): Promise<boolean> {
-  try {
-    const resp = await fetch('/api/config');
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return !!data.libraryEnabled;
-  } catch {
-    return false;
-  }
+  const cfg = await getConfig();
+  return !!cfg?.libraryEnabled;
 }
 
 async function saveToLibrary(blob: Blob, artist: string, album: string, filename: string): Promise<string> {
@@ -494,7 +333,7 @@ export async function downloadAlbumLibrary(
   const songs = album.songs;
   const tracks: TrackStatus[] = songs.map(s => ({ id: s.id, title: s.title, status: 'pending' as const }));
 
-  const albumFolder = `${sanitizeFilename(album.title)} (${album.year})`;
+  const albumFolder = albumFolderName(album.title, album.year);
 
   const emit = (i: number, stage: string, pct: number) =>
     onProgress({ current: i + 1, total: songs.length, currentTitle: songs[i]?.title ?? '', stage, percent: pct, tracks: [...tracks] });
@@ -518,69 +357,48 @@ export async function downloadAlbumLibrary(
     tracks[i] = { ...tracks[i], status: 'downloading' };
     emit(i, 'Starting…', Math.round((i / songs.length) * 100));
 
-    let attempt = 0;
-    let resolved = false;
-
-    while (!resolved && attempt < 2) {
-      try {
-        const blob = await trackToBlob(songs[i], quality, (stage, p) => {
+    await runTrackWithRetry(i, songs[i], tracks, onFailure, async () => {
+      const blob = await trackToBlob(songs[i], {
+        quality,
+        albumArtistOverride,
+        scope: songs[i].id,
+        onProgress: (stage, p) => {
           tracks[i] = { ...tracks[i], status: 'downloading' };
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 100));
-        }, albumArtistOverride);
+        },
+      });
 
-        // Save to server library instead of triggering browser download
-        const artistName = getArtistT(songs[i]);
-        const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(songs[i].title)} - ${sanitizeFilename(artistName)}.m4a`;
+      // Save to server library instead of triggering browser download
+      const artistName = getSongArtist(songs[i]);
+      const filename = trackFileName(songs[i].title, artistName, i + 1);
 
-        // Use album artist override (Navidrome fix) or album-level artist for folder structure
-        const folderArtist = albumArtistOverride || album.artists?.primary?.[0]?.name || artistName;
+      // Use album artist override (Navidrome fix) or album-level artist for folder structure
+      const folderArtist = albumArtistOverride || album.artists?.primary?.[0]?.name || artistName;
 
-        emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 100));
-        const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
+      emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 100));
+      const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
 
-        tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
+      tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
 
-        // Record to history so the track exists in the DB for playlist linking
-        recordDownload({
-          saavnId: song.id,
-          type: 'track',
-          title: song.title,
-          artist: artistName,
-          album: album.title,
-          image: song.image || '',
-          quality,
-          mode: 'library',
-          songCount: 0,
-          duration: song.more_info?.duration || '0',
-          playCount: song.play_count || '0',
-          year: song.year || album.year || '',
-          language: song.language || album.language || '',
-          isExplicit: song.isExplicit || false,
-          filePath: savedPath,
-        }).catch(() => { /* best-effort */ });
-
-        resolved = true;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        if (attempt === 0) {
-          const action = await onFailure(i, songs[i], msg);
-          if (action === 'skip') {
-            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-            resolved = true;
-          } else {
-            attempt++;
-          }
-        } else {
-          const action = await onFailure(i, songs[i], msg);
-          if (action === 'skip') {
-            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-          } else {
-            tracks[i] = { ...tracks[i], status: 'failed', error: msg };
-          }
-          resolved = true;
-        }
-      }
-    }
+      // Record to history so the track exists in the DB for playlist linking
+      recordDownload({
+        saavnId: song.id,
+        type: 'track',
+        title: song.title,
+        artist: artistName,
+        album: album.title,
+        image: song.image || '',
+        quality,
+        mode: 'library',
+        songCount: 0,
+        duration: song.more_info?.duration || '0',
+        playCount: song.play_count || '0',
+        year: song.year || album.year || '',
+        language: song.language || album.language || '',
+        isExplicit: song.isExplicit || false,
+        filePath: savedPath,
+      }).catch(() => { /* best-effort */ });
+    });
   }
 
   onProgress({ current: songs.length, total: songs.length, currentTitle: '', stage: 'Done!', percent: 100, tracks: [...tracks] });
@@ -720,7 +538,7 @@ export async function downloadPlaylistLibrary(
       playlistTracks.push({
         saavnId: song.id,
         title: song.title,
-        artist: getArtistT(song),
+        artist: getSongArtist(song),
         duration: parseInt(song.more_info?.duration || '0', 10),
         filePath: existingInfo.filePath,
       });
@@ -731,83 +549,62 @@ export async function downloadPlaylistLibrary(
     tracks[i] = { ...tracks[i], status: 'downloading' };
     emit(i, 'Starting…', Math.round((i / songs.length) * 95));
 
-    let attempt = 0;
-    let resolved = false;
+    await runTrackWithRetry(i, songs[i], tracks, onFailure, async () => {
+      // Get the album artist for this track's album (from fetched album details)
+      const albumId = song.more_info?.album_id || '';
+      const albumInfo = albumArtistMap.get(albumId);
+      const folderArtist = albumInfo?.albumArtist || getSongArtist(song);
+      const albumArtistOverride = albumInfo?.albumArtist || undefined;
 
-    while (!resolved && attempt < 2) {
-      try {
-        // Get the album artist for this track's album (from fetched album details)
-        const albumId = song.more_info?.album_id || '';
-        const albumInfo = albumArtistMap.get(albumId);
-        const folderArtist = albumInfo?.albumArtist || getArtistT(song);
-        const albumArtistOverride = albumInfo?.albumArtist || undefined;
-
-        // Embed with the correct album artist tag
-        const blob = await trackToBlob(songs[i], quality, (stage, p) => {
+      // Embed with the correct album artist tag
+      const blob = await trackToBlob(songs[i], {
+        quality,
+        albumArtistOverride,
+        scope: songs[i].id,
+        onProgress: (stage, p) => {
           tracks[i] = { ...tracks[i], status: 'downloading' };
           emit(i, stage, Math.round(((i + p / 100) / songs.length) * 95));
-        }, albumArtistOverride);
+        },
+      });
 
-        // Use album artist for folder, track's own album name for subfolder
-        const trackAlbum = song.more_info?.album || album.title;
-        const trackYear = song.year || albumInfo?.year || '';
-        const albumFolder = `${sanitizeFilename(trackAlbum)}${trackYear ? ` (${trackYear})` : ''}`;
-        const artistName = getArtistT(song);
-        const filename = `${sanitizeFilename(song.title)} - ${sanitizeFilename(artistName)}.m4a`;
+      // Use album artist for folder, track's own album name for subfolder
+      const trackAlbum = song.more_info?.album || album.title;
+      const trackYear = song.year || albumInfo?.year || '';
+      const albumFolder = albumFolderName(trackAlbum, trackYear);
+      const artistName = getSongArtist(song);
+      const filename = trackFileName(song.title, artistName);
 
-        emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 95));
-        const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
+      emit(i, 'Saving to library…', Math.round(((i + 0.95) / songs.length) * 95));
+      const savedPath = await saveToLibrary(blob, folderArtist, albumFolder, filename);
 
-        tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
-        playlistTracks.push({
-          saavnId: song.id,
-          title: song.title,
-          artist: artistName,
-          duration: parseInt(song.more_info?.duration || '0', 10),
-          filePath: savedPath,
-        });
+      tracks[i] = { ...tracks[i], status: 'done', filePath: savedPath };
+      playlistTracks.push({
+        saavnId: song.id,
+        title: song.title,
+        artist: artistName,
+        duration: parseInt(song.more_info?.duration || '0', 10),
+        filePath: savedPath,
+      });
 
-        // Record to history so the track exists in the DB before playlist linking
-        recordDownload({
-          saavnId: song.id,
-          type: 'track',
-          title: song.title,
-          artist: artistName,
-          album: trackAlbum,
-          image: song.image || '',
-          quality,
-          mode: 'library',
-          songCount: 0,
-          duration: song.more_info?.duration || '0',
-          playCount: song.play_count || '0',
-          year: song.year || trackYear,
-          language: song.language || '',
-          isExplicit: song.isExplicit || false,
-          filePath: savedPath,
-        }).catch(() => { /* best-effort */ });
-
-        resolved = true;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        if (attempt === 0) {
-          const action = await onFailure(i, songs[i], msg);
-          if (action === 'skip') {
-            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-            resolved = true;
-          } else {
-            attempt++;
-          }
-        } else {
-          const action = await onFailure(i, songs[i], msg);
-          if (action === 'skip') {
-            tracks[i] = { ...tracks[i], status: 'skipped', error: msg };
-          } else {
-            tracks[i] = { ...tracks[i], status: 'failed', error: msg };
-          }
-          resolved = true;
-        }
-      }
-    }
+      // Record to history so the track exists in the DB before playlist linking
+      recordDownload({
+        saavnId: song.id,
+        type: 'track',
+        title: song.title,
+        artist: artistName,
+        album: trackAlbum,
+        image: song.image || '',
+        quality,
+        mode: 'library',
+        songCount: 0,
+        duration: song.more_info?.duration || '0',
+        playCount: song.play_count || '0',
+        year: song.year || trackYear,
+        language: song.language || '',
+        isExplicit: song.isExplicit || false,
+        filePath: savedPath,
+      }).catch(() => { /* best-effort */ });
+    });
   }
 
   // Phase 4: Generate m3u playlist file
