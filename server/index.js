@@ -11,17 +11,19 @@
  */
 
 import { createServer } from 'node:http';
-import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join, extname, resolve, normalize } from 'node:path';
-import { existsSync } from 'node:fs';
-import { initDb, getDb } from './db/index.js';
+import { initDb } from './db/index.js';
 import { handleLibraryRoute } from './library/routes.js';
 import { handleHistoryRoute } from './history/routes.js';
+import { getExistingTracks } from './history/store.js';
 import { handlePlaylistRoute } from './playlists/routes.js';
 import { handleProxyRoute } from './proxy.js';
 import { initScheduler } from './library/sync-scheduler.js';
 import { backfillFilePaths } from './playlists/store.js';
 import { handleDownloadsRoute } from './downloads/routes.js';
+import { createPlaylistFile } from './downloads/album.js';
+import { writeToLibrary } from './downloads/engine.js';
 import { probeFfmpeg } from './downloads/ffmpeg.js';
 import { downloadWorker } from './downloads/queue.js';
 import { sweepArtifacts, ARTIFACT_TTL_SECONDS } from './downloads/artifacts.js';
@@ -69,15 +71,6 @@ function jsonResponse(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
-function sanitizePathSegment(segment) {
-  // Remove path traversal attempts and invalid filesystem chars
-  return segment
-    .replace(/\.\./g, '')
-    .replace(/[\/\\:*?"<>|]/g, '_')
-    .trim()
-    .slice(0, 255);
-}
-
 async function parseMultipartBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -118,7 +111,8 @@ async function handleLibrarySave(req, res) {
     return jsonResponse(res, 403, { error: 'Library saving is not configured' });
   }
 
-  // Expect raw binary body with metadata in headers (URI-encoded for non-ASCII safety)
+  // Metadata travels in headers (URI-encoded for non-ASCII safety); the body is the raw file.
+  // writeToLibrary applies the same sanitize + Artist/Album (Year)/Track layout + traversal guard.
   const artist = decodeURIComponent(req.headers['x-artist'] || '');
   const album = decodeURIComponent(req.headers['x-album'] || 'Unknown Album');
   const filename = decodeURIComponent(req.headers['x-filename'] || '');
@@ -127,42 +121,10 @@ async function handleLibrarySave(req, res) {
     return jsonResponse(res, 400, { error: 'Missing x-filename header' });
   }
 
-  const safeArtist = artist ? sanitizePathSegment(artist) : '';
-  const safeAlbum = sanitizePathSegment(album);
-  const safeFilename = sanitizePathSegment(filename);
-
-  if (!safeFilename) {
-    return jsonResponse(res, 400, { error: 'Invalid filename' });
-  }
-
   try {
     const body = await parseMultipartBody(req);
-
-    // Build path: Artist/Album/Track (or Album/Track if no artist provided)
-    const targetDir = safeArtist
-      ? join(LIBRARY_PATH, safeArtist, safeAlbum)
-      : join(LIBRARY_PATH, safeAlbum);
-    await mkdir(targetDir, { recursive: true });
-
-    const targetPath = join(targetDir, safeFilename);
-
-    // Prevent path traversal (resolved path must be inside LIBRARY_PATH)
-    const resolvedTarget = resolve(targetPath);
-    const resolvedBase = resolve(LIBRARY_PATH);
-    if (!resolvedTarget.startsWith(resolvedBase)) {
-      return jsonResponse(res, 400, { error: 'Invalid path' });
-    }
-
-    await writeFile(targetPath, body);
-
-    const relativePath = safeArtist
-      ? `${safeArtist}/${safeAlbum}/${safeFilename}`
-      : `${safeAlbum}/${safeFilename}`;
-
-    jsonResponse(res, 200, {
-      success: true,
-      path: relativePath,
-    });
+    const relativePath = await writeToLibrary(body, artist, album, filename);
+    jsonResponse(res, 200, { success: true, path: relativePath });
   } catch (err) {
     console.error('[library/save] Error:', err.message);
     jsonResponse(res, 500, { error: err.message });
@@ -188,23 +150,7 @@ async function handleLibraryCheckTracks(req, res) {
       return jsonResponse(res, 400, { error: 'saavnIds array required' });
     }
 
-    const db = getDb();
-
-    // Look up existing tracks by saavn_id
-    const placeholders = saavnIds.map(() => '?').join(',');
-    const rows = db.prepare(`SELECT saavn_id, file_path FROM tracks WHERE saavn_id IN (${placeholders})`).all(...saavnIds);
-
-    const existing = {};
-    for (const row of rows) {
-      if (row.file_path) {
-        // Check if file exists on disk — try both library (staging) and music (final) paths
-        const libraryFullPath = join(LIBRARY_PATH, row.file_path);
-        const musicFullPath = MUSIC_PATH ? join(MUSIC_PATH, row.file_path) : '';
-        const fileExists = existsSync(libraryFullPath) || (musicFullPath && existsSync(musicFullPath));
-        existing[row.saavn_id] = { filePath: row.file_path, exists: fileExists };
-      }
-    }
-
+    const existing = getExistingTracks(saavnIds);
     jsonResponse(res, 200, { existing });
   } catch (err) {
     console.error('[library/check-tracks] Error:', err.message);
@@ -234,78 +180,8 @@ async function handleLibraryPlaylist(req, res) {
       return jsonResponse(res, 400, { error: 'name and tracks array required' });
     }
 
-    const db = getDb();
-    const { randomUUID } = await import('node:crypto');
-
-    // Create or get the playlist entry in the DB
-    let playlist = db.prepare('SELECT id FROM playlists WHERE name = ?').get(name);
-    const now = new Date().toISOString();
-
-    if (!playlist) {
-      const playlistId = randomUUID();
-      db.prepare(`
-        INSERT INTO playlists (id, name, description, auto_generate, auto_criteria, created_at, updated_at)
-        VALUES (?, ?, ?, 0, '', ?, ?)
-      `).run(playlistId, name, `Downloaded from JioSaavn`, now, now);
-      playlist = { id: playlistId };
-    } else {
-      // Update timestamp
-      db.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').run(now, playlist.id);
-      // Clear existing track links (rebuild from scratch)
-      db.prepare('DELETE FROM playlist_tracks WHERE playlist_id = ?').run(playlist.id);
-    }
-
-    // Link tracks to the playlist by saavn_id
-    const findTrack = db.prepare('SELECT id FROM tracks WHERE saavn_id = ?');
-    const insertLink = db.prepare(`
-      INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    const linkAll = db.transaction(() => {
-      for (let i = 0; i < tracks.length; i++) {
-        const track = tracks[i];
-        if (!track.saavnId) continue;
-        const dbTrack = findTrack.get(track.saavnId);
-        if (dbTrack) {
-          insertLink.run(playlist.id, dbTrack.id, i, now);
-        }
-      }
-    });
-    linkAll();
-
-    // Build m3u with absolute paths (using MUSIC_PATH where files end up after sync)
-    const musicPrefix = MUSIC_PATH ? (MUSIC_PATH.endsWith('/') ? MUSIC_PATH : MUSIC_PATH + '/') : '';
-
-    let m3u = '#EXTM3U\n';
-    m3u += `#PLAYLIST:${name}\n`;
-
-    for (const track of tracks) {
-      const duration = Math.round(track.duration || 0);
-      const display = track.artist ? `${track.artist} - ${track.title}` : track.title;
-      m3u += `#EXTINF:${duration},${display}\n`;
-      m3u += `${musicPrefix}${track.filePath}\n`;
-    }
-
-    // Write to Playlists/ directory in the MUSIC_PATH (final destination)
-    // Also write to LIBRARY_PATH for immediate use before sync
-    const targets = [MUSIC_PATH, LIBRARY_PATH].filter(Boolean);
-    const safeName = sanitizePathSegment(name);
-    let writtenPath = '';
-
-    for (const base of targets) {
-      const playlistDir = join(base, 'Playlists');
-      await mkdir(playlistDir, { recursive: true });
-      const playlistPath = join(playlistDir, `${safeName}.m3u`);
-
-      const resolvedPath = resolve(playlistPath);
-      if (!resolvedPath.startsWith(resolve(base))) continue;
-
-      await writeFile(playlistPath, m3u, 'utf-8');
-      if (!writtenPath) writtenPath = `Playlists/${safeName}.m3u`;
-    }
-
-    jsonResponse(res, 200, { success: true, playlistId: playlist.id, path: writtenPath });
+    const { playlistId, path } = await createPlaylistFile(name, tracks);
+    jsonResponse(res, 200, { success: true, playlistId, path });
   } catch (err) {
     console.error('[library/playlist] Error:', err.message);
     jsonResponse(res, 500, { error: err.message });
@@ -493,7 +369,7 @@ async function startup() {
     } else {
       console.log(
         `[saavn-dl] Server-side downloads disabled — ffmpeg not available ` +
-          `(install ffmpeg-static or set SAAVN_FFMPEG_PATH). Client will use the in-browser pipeline.`,
+        `(install ffmpeg-static or set SAAVN_FFMPEG_PATH). Client will use the in-browser pipeline.`,
       );
     }
 

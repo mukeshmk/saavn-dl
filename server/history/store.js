@@ -7,9 +7,39 @@
  * Deduplicates by saavnId + type — re-downloading updates the timestamp.
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { getDb } from '../db/index.js';
 
+const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
+const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
+
 // ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Which of the given saavn ids already exist on disk (staging library or NAS music path).
+ * Single source for the "already downloaded" check — used by the
+ * /api/library/check-tracks handler and the server download pipeline so both agree.
+ * @returns {Record<string, { filePath: string, exists: boolean }>}
+ */
+export function getExistingTracks(saavnIds) {
+  if (!Array.isArray(saavnIds) || saavnIds.length === 0) return {};
+  const db = getDb();
+  const placeholders = saavnIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(`SELECT saavn_id, file_path FROM tracks WHERE saavn_id IN (${placeholders})`)
+    .all(...saavnIds);
+
+  const existing = {};
+  for (const row of rows) {
+    if (!row.file_path) continue;
+    const libraryFullPath = LIBRARY_PATH ? join(LIBRARY_PATH, row.file_path) : '';
+    const musicFullPath = MUSIC_PATH ? join(MUSIC_PATH, row.file_path) : '';
+    const exists = !!((libraryFullPath && existsSync(libraryFullPath)) || (musicFullPath && existsSync(musicFullPath)));
+    existing[row.saavn_id] = { filePath: row.file_path, exists };
+  }
+  return existing;
+}
 
 /**
  * Add a download entry to history.

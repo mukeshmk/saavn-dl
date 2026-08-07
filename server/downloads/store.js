@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../db/index.js';
+import { getArtistTag } from './engine.js';
 
 // ─── Config (paused flag etc.) ──────────────────────────────────────────────
 
@@ -48,10 +49,7 @@ function nextPosition(db) {
 export function insertTrackJob({ song, quality, mode = 'direct', overrideMeta, overrideFilename }) {
   const db = getDb();
   const id = `track-${song.id}-${Date.now()}`;
-  const artist =
-    song.subtitle?.split(' - ')[0]?.trim() ||
-    song.more_info?.artists?.primary?.[0]?.name ||
-    'Unknown Artist';
+  const artist = getArtistTag(song);
 
   const payload = JSON.stringify({ song, quality, mode, overrideMeta, overrideFilename });
 
@@ -335,13 +333,13 @@ function projectJob(row) {
     hasArtifact: !!row.artifact_path,
     trackProgress: total
       ? {
-          current,
-          total,
-          currentTitle,
-          stage: row.stage,
-          percent: row.progress,
-          tracks,
-        }
+        current,
+        total,
+        currentTitle,
+        stage: row.stage,
+        percent: row.progress,
+        tracks,
+      }
       : undefined,
   };
 }

@@ -11,31 +11,35 @@
  * the `ctx` hooks provided by the worker.
  */
 
-import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { getDb } from '../db/index.js';
 import { fetchAllowed } from './fetcher.js';
-import { sanitizeFilename } from './decrypt.js';
-import { processTrack, writeToLibrary, sanitizePathSegment } from './engine.js';
+import { sanitizeFilename, sanitizePathSegment } from './decrypt.js';
+import { processTrack, writeToLibrary, getArtistTag } from './engine.js';
 import { recordTrack } from './recorder.js';
+import { getExistingTracks } from '../history/store.js';
 
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
 const DETAIL_API = 'https://sda.rhythmax.workers.dev/album';
 
-// ─── Artist helpers (mirror albumDownload.ts getArtistT / detectMultiArtist) ─
+// ─── Naming helpers (single source for on-disk folder + file names) ──────────
 
-/** Album/playlist track artist (mirrors albumDownload.ts getArtistT). */
-export function getArtistName(song) {
-  return (
-    song.subtitle?.split(' - ')[0]?.trim() ||
-    song.more_info?.artists?.primary?.[0]?.name ||
-    'Unknown Artist'
-  );
+/** Album folder: "Title (Year)" — the "(Year)" suffix is omitted when year is empty. */
+export function buildAlbumFolder(title, year) {
+  return `${sanitizeFilename(title)}${year ? ` (${year})` : ''}`;
 }
+
+/** Track filename: "NN - Title - Artist.m4a"; the number prefix is omitted when trackNumber is nullish. */
+export function buildTrackFilename(title, artist, trackNumber) {
+  const prefix = trackNumber != null ? `${String(trackNumber).padStart(2, '0')} - ` : '';
+  return `${prefix}${sanitizeFilename(title)} - ${sanitizeFilename(artist)}.m4a`;
+}
+
+// ─── Artist helpers (mirror albumDownload.ts getArtistT / detectMultiArtist) ─
 
 /**
  * Detect whether an album spans multiple artists and suggest a unified Album Artist
@@ -44,9 +48,9 @@ export function getArtistName(song) {
 export function detectMultiArtist(album) {
   const artistSet = new Set();
   for (const song of album.songs) {
-    artistSet.add(getArtistName(song).toLowerCase().trim());
+    artistSet.add(getArtistTag(song).toLowerCase().trim());
   }
-  const uniqueArtists = [...new Set(album.songs.map((s) => getArtistName(s)))];
+  const uniqueArtists = [...new Set(album.songs.map((s) => getArtistTag(s)))];
   const isMultiArtist = artistSet.size > 1;
 
   let suggestedAlbumArtist = 'Various Artists';
@@ -57,29 +61,6 @@ export function detectMultiArtist(album) {
   }
 
   return { isMultiArtist, uniqueArtists, suggestedAlbumArtist };
-}
-
-// ─── Existing-track check (server port of handleLibraryCheckTracks) ──────────
-
-/**
- * Which of the given saavn ids already exist on disk (staging or music path).
- * @returns {Record<string, { filePath: string, exists: boolean }>}
- */
-export function checkExistingTracks(saavnIds) {
-  if (!Array.isArray(saavnIds) || saavnIds.length === 0) return {};
-  const db = getDb();
-  const placeholders = saavnIds.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT saavn_id, file_path FROM tracks WHERE saavn_id IN (${placeholders})`).all(...saavnIds);
-
-  const existing = {};
-  for (const row of rows) {
-    if (!row.file_path) continue;
-    const libraryFullPath = LIBRARY_PATH ? join(LIBRARY_PATH, row.file_path) : '';
-    const musicFullPath = MUSIC_PATH ? join(MUSIC_PATH, row.file_path) : '';
-    const fileExists = (libraryFullPath && existsSync(libraryFullPath)) || (musicFullPath && existsSync(musicFullPath));
-    existing[row.saavn_id] = { filePath: row.file_path, exists: !!fileExists };
-  }
-  return existing;
 }
 
 // ─── Playlist album-artist resolution (port of resolveAlbumArtists) ──────────
@@ -142,7 +123,7 @@ export async function resolveAlbumArtists(songs, signal) {
 /**
  * Create/refresh a playlist row, link its tracks, and write the .m3u to
  * MUSIC_PATH/Playlists and LIBRARY_PATH/Playlists.
- * @returns {Promise<string>} the relative path written (or '')
+ * @returns {Promise<{ playlistId: string, path: string }>} playlist id + relative m3u path ('' if nothing written)
  */
 export async function createPlaylistFile(name, tracks) {
   const db = getDb();
@@ -196,7 +177,7 @@ export async function createPlaylistFile(name, tracks) {
     if (!writtenPath) writtenPath = `Playlists/${safeName}.m3u`;
   }
 
-  return writtenPath;
+  return { playlistId: playlist.id, path: writtenPath };
 }
 
 // ─── Shared per-track processing with headless retry ─────────────────────────
@@ -259,17 +240,17 @@ async function downloadTrackToBuffer(song, quality, { jobId, signal, artist, alb
 export async function processAlbumLibrary(album, quality, ctx) {
   const { jobId, signal, albumArtistOverride, setTrack, setProgress } = ctx;
   const songs = album.songs || [];
-  const albumFolder = `${sanitizeFilename(album.title)} (${album.year})`;
+  const albumFolder = buildAlbumFolder(album.title, album.year);
 
   setProgress(0, 'Checking existing tracks…');
-  const existingMap = checkExistingTracks(songs.map((s) => s.id));
+  const existingMap = getExistingTracks(songs.map((s) => s.id));
 
   const results = [];
 
   for (let i = 0; i < songs.length; i++) {
     if (signal?.aborted) throw new Error('Aborted');
     const song = songs[i];
-    const artistName = getArtistName(song);
+    const artistName = getArtistTag(song);
     const existing = existingMap[song.id];
 
     if (existing?.exists && existing.filePath) {
@@ -280,7 +261,7 @@ export async function processAlbumLibrary(album, quality, ctx) {
     }
 
     setTrack(i, { status: 'downloading' });
-    const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(song.title)} - ${sanitizeFilename(artistName)}.m4a`;
+    const filename = buildTrackFilename(song.title, artistName, i + 1);
     const folderArtist = albumArtistOverride || album.artists?.primary?.[0]?.name || artistName;
     const albumArtistTag = albumArtistOverride || artistName;
 
@@ -336,7 +317,7 @@ export async function processPlaylistLibrary(album, quality, ctx) {
   const songs = album.songs || [];
 
   setProgress(0, 'Checking existing tracks…');
-  const existingMap = checkExistingTracks(songs.map((s) => s.id));
+  const existingMap = getExistingTracks(songs.map((s) => s.id));
 
   setProgress(1, 'Resolving album artists…');
   const albumArtistMap = await resolveAlbumArtists(songs, signal);
@@ -347,7 +328,7 @@ export async function processPlaylistLibrary(album, quality, ctx) {
   for (let i = 0; i < songs.length; i++) {
     if (signal?.aborted) throw new Error('Aborted');
     const song = songs[i];
-    const artistName = getArtistName(song);
+    const artistName = getArtistTag(song);
     const albumId = song.more_info?.album_id || '';
     const albumInfo = albumArtistMap.get(albumId);
     const existing = existingMap[song.id];
@@ -372,8 +353,8 @@ export async function processPlaylistLibrary(album, quality, ctx) {
     const albumArtistTag = albumInfo?.albumArtist || artistName;
     const trackAlbum = song.more_info?.album || album.title;
     const trackYear = song.year || albumInfo?.year || '';
-    const albumFolder = `${sanitizeFilename(trackAlbum)}${trackYear ? ` (${trackYear})` : ''}`;
-    const filename = `${sanitizeFilename(song.title)} - ${sanitizeFilename(artistName)}.m4a`;
+    const albumFolder = buildAlbumFolder(trackAlbum, trackYear);
+    const filename = buildTrackFilename(song.title, artistName);
 
     const res = await downloadTrackToLibrary(song, quality, {
       jobId,
@@ -447,7 +428,7 @@ export async function processPlaylistLibrary(album, quality, ctx) {
 export async function processAlbumArchive(album, quality, ctx) {
   const { jobId, signal, albumArtistOverride, setTrack, setProgress } = ctx;
   const songs = album.songs || [];
-  const folderName = sanitizeFilename(`${album.title} (${album.year})`);
+  const folderName = buildAlbumFolder(album.title, album.year);
 
   const zip = new JSZip();
   const folder = zip.folder(folderName) || zip;
@@ -456,7 +437,7 @@ export async function processAlbumArchive(album, quality, ctx) {
   for (let i = 0; i < songs.length; i++) {
     if (signal?.aborted) throw new Error('Aborted');
     const song = songs[i];
-    const artistName = getArtistName(song);
+    const artistName = getArtistTag(song);
 
     setTrack(i, { status: 'downloading' });
     // Reserve the last 8% of the bar for zip assembly.
@@ -469,7 +450,7 @@ export async function processAlbumArchive(album, quality, ctx) {
     });
 
     if (res.ok) {
-      const filename = `${String(i + 1).padStart(2, '0')} - ${sanitizeFilename(song.title)} - ${sanitizeFilename(artistName)}.m4a`;
+      const filename = buildTrackFilename(song.title, artistName, i + 1);
       folder.file(filename, res.buffer);
       setTrack(i, { status: 'done' });
       results.push({ song, status: 'done', artist: artistName });
@@ -486,7 +467,7 @@ export async function processAlbumArchive(album, quality, ctx) {
     setProgress(94 + Math.round(meta.percent * 0.05), `Compressing ${meta.percent.toFixed(0)}%…`);
   });
 
-  const filename = `${sanitizeFilename(album.title)} (${album.year}).zip`;
+  const filename = `${buildAlbumFolder(album.title, album.year)}.zip`;
   setProgress(100, 'Done!');
   return { buffer, filename, results };
 }

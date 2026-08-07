@@ -44,3 +44,14 @@ export function getQualityUrl(decryptedUrl, quality) {
 export function sanitizeFilename(name) {
   return name.replace(/[/\\?%*:|"<>]/g, '-').trim();
 }
+
+/**
+ * Sanitize a single path segment (a folder name or filename) for on-disk use.
+ * Uses the exact same illegal-char rule as sanitizeFilename (→ '-') so folder
+ * segments and filenames can never diverge, plus path-traversal hardening
+ * (strips '..') and a length cap. The caller's resolve()/startsWith() check
+ * remains the real traversal backstop.
+ */
+export function sanitizePathSegment(segment) {
+  return sanitizeFilename(String(segment).replace(/\.\./g, '')).slice(0, 255);
+}

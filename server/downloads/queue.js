@@ -23,7 +23,7 @@ import {
   processPlaylistLibrary,
   processAlbumArchive,
   detectMultiArtist,
-  getArtistName,
+  buildAlbumFolder,
 } from './album.js';
 
 const PROGRESS_EMIT_INTERVAL_MS = 500;
@@ -168,7 +168,7 @@ class DownloadWorker {
       if (!isLibraryConfigured()) throw new Error('Library saving is not configured');
       const albumName = overrideMeta?.album || song.more_info?.album || 'Unknown Album';
       const year = overrideMeta?.year || song.year || '';
-      const albumFolder = `${sanitizeFilename(albumName)}${year ? ` (${year})` : ''}`;
+      const albumFolder = buildAlbumFolder(albumName, year);
 
       ctx.setProgress(96, 'Saving to library…');
       const savedPath = await writeToLibrary(buffer, artistName, albumFolder, filename);
@@ -266,7 +266,7 @@ class DownloadWorker {
 
     const tracks = songs.map((song, idx) => {
       const r = byId.get(song.id);
-      const artistName = getArtistName(song);
+      const artistName = getArtistTag(song);
       return {
         saavnId: song.id,
         title: song.title,

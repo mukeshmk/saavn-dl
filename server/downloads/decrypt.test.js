@@ -11,7 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import CryptoJS from 'crypto-js';
-import { decryptMediaUrl, getQualityUrl, sanitizeFilename } from './decrypt.js';
+import { decryptMediaUrl, getQualityUrl, sanitizeFilename, sanitizePathSegment } from './decrypt.js';
 
 const DES_KEY = CryptoJS.enc.Utf8.parse('38346591');
 
@@ -49,4 +49,17 @@ test('getQualityUrl swaps the quality suffix', () => {
 
 test('sanitizeFilename strips filesystem-unsafe characters', () => {
   assert.equal(sanitizeFilename('AC/DC: Back?In*Black'), 'AC-DC- Back-In-Black');
+});
+
+test('sanitizePathSegment uses the same char rule as sanitizeFilename (folders == files)', () => {
+  // Folder segments and filenames must produce the same substitution ('-'),
+  // otherwise the same track can be filed under divergent names.
+  assert.equal(sanitizePathSegment('AC/DC'), 'AC-DC');
+  assert.equal(sanitizePathSegment('AC/DC'), sanitizeFilename('AC/DC'));
+});
+
+test('sanitizePathSegment neutralizes path traversal', () => {
+  const out = sanitizePathSegment('../../etc/passwd');
+  assert.ok(!out.includes('..'));
+  assert.ok(!out.includes('/'));
 });

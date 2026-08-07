@@ -78,7 +78,3 @@ export function addSseClient(req, res, currentState) {
 export function broadcast(state) {
   for (const res of clients) writeState(res, state);
 }
-
-export function clientCount() {
-  return clients.size;
-}

@@ -13,7 +13,7 @@
 
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { decryptMediaUrl, getQualityUrl } from './decrypt.js';
+import { decryptMediaUrl, getQualityUrl, sanitizePathSegment } from './decrypt.js';
 import { fetchAllowed } from './fetcher.js';
 import { runFfmpeg, ensureJobTempDir, jobTempDir } from './ffmpeg.js';
 
@@ -79,7 +79,7 @@ function metadataArgs(meta) {
  * @returns {Promise<Buffer>}
  */
 export async function processTrack(song, quality, opts = {}) {
-  const { jobId = 'adhoc', signal, onProgress = () => {}, albumArtist, publisher, copyright, overrideMeta } = opts;
+  const { jobId = 'adhoc', signal, onProgress = () => { }, albumArtist, publisher, copyright, overrideMeta } = opts;
   const { more_info } = song;
 
   if (signal?.aborted) throw new Error('Aborted');
@@ -108,23 +108,23 @@ export async function processTrack(song, quality, opts = {}) {
   const artist = opts.artist || getArtistTag(song);
   const meta = overrideMeta
     ? {
-        title: overrideMeta.title,
-        artist: overrideMeta.artist,
-        albumArtist: albumArtist || overrideMeta.albumArtist,
-        album: overrideMeta.album,
-        year: overrideMeta.year,
-        publisher: publisher || more_info.label,
-        copyright: overrideMeta.copyright || copyright,
-      }
+      title: overrideMeta.title,
+      artist: overrideMeta.artist,
+      albumArtist: albumArtist || overrideMeta.albumArtist,
+      album: overrideMeta.album,
+      year: overrideMeta.year,
+      publisher: publisher || more_info.label,
+      copyright: overrideMeta.copyright || copyright,
+    }
     : {
-        title: song.title,
-        artist,
-        albumArtist,
-        album: more_info.album,
-        year: song.year,
-        publisher,
-        copyright,
-      };
+      title: song.title,
+      artist,
+      albumArtist,
+      album: more_info.album,
+      year: song.year,
+      publisher,
+      copyright,
+    };
 
   const dir = await ensureJobTempDir(jobId);
   const inF = join(dir, `in_${song.id}.mp4`);
@@ -181,15 +181,6 @@ export async function processTrack(song, quality, opts = {}) {
 }
 
 // ─── Library write (mirrors handleLibrarySave) ──────────────────────────────
-
-/** Same sanitization as server/index.js sanitizePathSegment. */
-export function sanitizePathSegment(segment) {
-  return String(segment)
-    .replace(/\.\./g, '')
-    .replace(/[\/\\:*?"<>|]/g, '_')
-    .trim()
-    .slice(0, 255);
-}
 
 export function isLibraryConfigured() {
   return !!LIBRARY_PATH;
