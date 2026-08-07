@@ -11,9 +11,19 @@
  *   - *.jiosaavn.com (images, API)
  */
 
-import { request as httpsRequest } from 'node:https';
-import { request as httpRequest } from 'node:http';
+import { request as httpsRequest, Agent as HttpsAgent } from 'node:https';
+import { request as httpRequest, Agent as HttpAgent } from 'node:http';
 import { URL } from 'node:url';
+
+// Reuse TCP+TLS connections across proxied requests. Without this, Node's
+// default global agent (keepAlive: false) opens a fresh connection — and a
+// full TLS handshake — for every API call and image/audio fetch. Over a VPN
+// the extra round-trips dominate latency. Pooled sockets still egress through
+// the same interface, so VPN routing is unaffected; stale sockets after a VPN
+// reconnect just error out and get replaced (proxyFetch retries on that).
+const agentOpts = { keepAlive: true, keepAliveMsecs: 15_000, maxSockets: 64, maxFreeSockets: 16 };
+const httpsAgent = new HttpsAgent(agentOpts);
+const httpAgent = new HttpAgent(agentOpts);
 
 // Exact hosts not covered by ALLOWED_SUFFIXES below.
 // (All *.saavncdn.com subdomains are matched by the '.saavncdn.com' suffix.)
@@ -70,17 +80,23 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
     return true;
   }
 
-  const requestFn = targetUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+  const isHttps = targetUrl.protocol === 'https:';
+  const requestFn = isHttps ? httpsRequest : httpRequest;
 
   const options = {
     hostname: targetUrl.hostname,
-    port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+    port: targetUrl.port || (isHttps ? 443 : 80),
     path: targetUrl.pathname + targetUrl.search,
     method: 'GET',
+    agent: isHttps ? httpsAgent : httpAgent,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': '*/*',
-      'Accept-Encoding': 'identity', // No compression — stream raw bytes
+      // Ask upstream to compress. We forward the compressed bytes and the
+      // Content-Encoding header untouched, so the browser (fetch/img) decodes
+      // them. Binary assets (audio/images) come back uncompressed anyway, so
+      // this only shrinks JSON API payloads (home feed, search, album detail).
+      'Accept-Encoding': 'gzip, deflate, br',
     },
     timeout: 60_000,
   };
@@ -108,6 +124,20 @@ export function handleProxyRoute(req, res, url, jsonResponse) {
     // Forward relevant headers
     const contentType = proxyRes.headers['content-type'];
     if (contentType) res.setHeader('Content-Type', contentType);
+
+    // Preserve the upstream compression so the browser can decode the body.
+    const contentEncoding = proxyRes.headers['content-encoding'];
+    if (contentEncoding) res.setHeader('Content-Encoding', contentEncoding);
+
+    // Let the browser reuse responses instead of re-fetching on every render /
+    // tab switch. Images are effectively immutable; API JSON gets a short TTL
+    // so repeat searches and Discover revisits are instant but not stale for
+    // long. Audio and everything else are left uncached (current behaviour).
+    if (contentType && contentType.startsWith('image/')) {
+      res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
+    } else if (contentType && /(json|text)/.test(contentType)) {
+      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes
+    }
 
     // Buffer the entire upstream response before sending to client.
     // This prevents "Content-Length exceeds response Body" errors when
