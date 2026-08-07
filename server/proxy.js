@@ -7,26 +7,18 @@
  *   GET /api/proxy?url=<encoded-url>
  *
  * Allowed origins (security):
- *   - *.saavncdn.com (audio streams)
+ *   - saavncdn.com and any *.saavncdn.com subdomain (audio streams, CDN variants)
  *   - *.jiosaavn.com (images, API)
- *   - c.saavncdn.com, c.sop.saavncdn.com (CDN variants)
  */
 
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { URL } from 'node:url';
 
-// Allowlist of domains the proxy will fetch from
+// Exact hosts not covered by ALLOWED_SUFFIXES below.
+// (All *.saavncdn.com subdomains are matched by the '.saavncdn.com' suffix.)
 const ALLOWED_HOSTS = [
-  'aac.saavncdn.com',
-  'c.saavncdn.com',
-  'c.sop.saavncdn.com',
-  'snp.saavncdn.com',
-  'sdl.saavncdn.com',
-  'www.saavncdn.com',
   'saavncdn.com',
-  'c.saavncdn.com',
-  'pli.saavncdn.com',
   'pagalworld.com.se',
 ];
 
