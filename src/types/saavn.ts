@@ -1,3 +1,5 @@
+import { getConfig } from '../utils/config';
+
 export interface SaavnArtist {
   id: string;
   artist_token: string;
@@ -119,17 +121,44 @@ export function formatDuration(sec?: string) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Image delivery.
+ *
+ * JioSaavn cover art lives on *.saavncdn.com and already ships in fixed sizes
+ * baked into the filename (…-150x150.jpg), so we just swap the size in the URL.
+ *
+ * Routing mirrors proxyFetch's strategy: when a server is present, images go
+ * through our own same-origin /api/proxy so they ride the same VPN path as
+ * every other request (and pick up its keep-alive + 7-day image cache). This
+ * skips the third-party rthmx.vercel.app/api/image hop entirely — that hop was
+ * just passing the already-sized image through, adding a cold-start-prone
+ * round trip for no benefit. Same-origin also sidesteps COEP: require-corp,
+ * so no crossOrigin attributes are needed.
+ *
+ * On static deployments (no server) we fall back to the jiosaavn-api image
+ * proxy, which sends the CORP header the browser needs under COEP.
+ */
+const IMAGE_FALLBACK_PROXY = 'https://rthmx.vercel.app/api/image';
+// Default jiosaavn-api instance. Replace with your own if you self-host it.
+
+// True once /api/config confirms a server is present. The <img> src builders
+// below are synchronous and can't await, so we latch this from the same
+// memoized getConfig() the rest of the app uses. It resolves before any image
+// renders (data-driven views await getConfig via proxyFetch first); until then
+// we take the static fallback, which also works when there's genuinely no server.
+let proxyReady = false;
+void getConfig().then((cfg) => { proxyReady = cfg !== null; });
+
+function resizeSaavnImage(url: string, size: '50x50' | '150x150' | '500x500'): string {
+  const sized = url.replace(/\d+x\d+/, size).replace('http://', 'https://');
+  return proxyReady
+    ? `/api/proxy?url=${encodeURIComponent(sized)}`
+    : `${IMAGE_FALLBACK_PROXY}?url=${encodeURIComponent(sized)}`;
+}
+
 export function searchImage(url: string) {
   if (!url) return "";
-
-  const image50 = url.replace(
-    /150x150|500x500/g,
-    "50x50"
-  );
-
-  return `https://rthmx.vercel.app/api/image?url=${encodeURIComponent(image50)}`;
-  // Defalut API (rthmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+  return resizeSaavnImage(url, '50x50');
 }
 
 export function isSaavnUrl(value: string) {
@@ -189,13 +218,10 @@ export interface AlbumDetail {
   songs: SaavnSong[];
 }
 
-/** Image proxy — always goes through the Vercel proxy */
+/** Image URL for a given size — routes through /api/proxy (VPN) when a server is present. */
 export function proxyImage(url: string, size: '50x50' | '150x150' | '500x500' = '150x150'): string {
   if (!url) return '';
-  const sized = url.replace(/\d+x\d+/, size).replace('http://', 'https://');
-  return `https://rthmx.vercel.app/api/image?url=${encodeURIComponent(sized)}`;
-  // Defalut API (rthmx.vercel.app). Replace with your jiosaavn-api instance.
-  // Visit https://github.com/ODSkyler/jiosaavn-api for more information.
+  return resizeSaavnImage(url, size);
 }
 
 /** Alias: album 500x500 cover for the album page */
