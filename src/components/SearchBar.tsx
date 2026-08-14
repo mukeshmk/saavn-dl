@@ -1,37 +1,42 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isSaavnUrl, isSaavnAlbumUrl } from '../types/saavn';
+import { isYoutubeUrl } from '../utils/youtubeImport';
 
 interface SearchBarProps {
   onUrlFetch: (url: string) => void;
   onAlbumFetch: (url: string) => void;
   onSearch: (query: string) => void;
+  onYoutubeImport: (url: string) => void;
+  youtubeImportEnabled: boolean;
   isLoading: boolean;
 }
 
-type InputMode = 'empty' | 'song-url' | 'album-url' | 'query';
+type InputMode = 'empty' | 'song-url' | 'album-url' | 'youtube-url' | 'query';
 
-function getMode(value: string): InputMode {
+function getMode(value: string, youtubeEnabled: boolean): InputMode {
   const v = value.trim();
   if (!v) return 'empty';
   if (isSaavnAlbumUrl(v)) return 'album-url';
-  if (isSaavnUrl(v))       return 'song-url';
+  if (isSaavnUrl(v)) return 'song-url';
+  if (youtubeEnabled && isYoutubeUrl(v)) return 'youtube-url';
   return 'query';
 }
 
-export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, isLoading }: SearchBarProps) {
-  const [value, setValue]   = useState('');
+export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, onYoutubeImport, youtubeImportEnabled, isLoading }: SearchBarProps) {
+  const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const mode = getMode(value);
+  const mode = getMode(value, youtubeImportEnabled);
 
   const handleSubmit = useCallback(() => {
     if (isLoading || !value.trim()) return;
-    if (mode === 'song-url')  { onUrlFetch(value.trim());   return; }
+    if (mode === 'song-url') { onUrlFetch(value.trim()); return; }
     if (mode === 'album-url') { onAlbumFetch(value.trim()); return; }
-    if (mode === 'query')     { onSearch(value.trim());      return; }
-  }, [isLoading, value, mode, onUrlFetch, onAlbumFetch, onSearch]);
+    if (mode === 'youtube-url') { onYoutubeImport(value.trim()); return; }
+    if (mode === 'query') { onSearch(value.trim()); return; }
+  }, [isLoading, value, mode, onUrlFetch, onAlbumFetch, onYoutubeImport, onSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') handleSubmit();
@@ -42,18 +47,20 @@ export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, isLoadin
       const text = await navigator.clipboard.readText();
       if (!text.trim()) return;
       setValue(text.trim());
-      const m = getMode(text.trim());
-      if (m === 'song-url')  { setTimeout(() => onUrlFetch(text.trim()),   80); }
+      const m = getMode(text.trim(), youtubeImportEnabled);
+      if (m === 'song-url') { setTimeout(() => onUrlFetch(text.trim()), 80); }
       if (m === 'album-url') { setTimeout(() => onAlbumFetch(text.trim()), 80); }
+      if (m === 'youtube-url') { setTimeout(() => onYoutubeImport(text.trim()), 80); }
     } catch { /* clipboard unavailable */ }
   };
 
   const clear = () => { setValue(''); inputRef.current?.focus(); };
 
-  const isUrl    = mode === 'song-url' || mode === 'album-url';
-  const btnLabel = mode === 'song-url'  ? 'Fetch'
-                 : mode === 'album-url' ? 'Open'
-                 : 'Search';
+  const isUrl = mode === 'song-url' || mode === 'album-url' || mode === 'youtube-url';
+  const btnLabel = mode === 'song-url' ? 'Fetch'
+    : mode === 'album-url' ? 'Open'
+      : mode === 'youtube-url' ? 'Import'
+        : 'Search';
   const btnActive = mode !== 'empty' && !isLoading;
 
   // Glow colour
@@ -125,7 +132,7 @@ export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, isLoadin
               className="flex-shrink-0 mr-1.5 p-1.5 text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/5"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </motion.button>
           )}
@@ -136,11 +143,10 @@ export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, isLoadin
           onClick={handleSubmit}
           disabled={!btnActive}
           whileTap={{ scale: btnActive ? 0.96 : 1 }}
-          className={`flex-shrink-0 m-2 px-4 py-2.5 rounded-xl text-sm font-display font-semibold transition-all duration-200 flex items-center gap-1.5 ${
-            btnActive
-              ? 'bg-cyan text-black hover:bg-cyan-dim shadow-glow'
-              : 'bg-border text-text-muted cursor-not-allowed'
-          }`}
+          className={`flex-shrink-0 m-2 px-4 py-2.5 rounded-xl text-sm font-display font-semibold transition-all duration-200 flex items-center gap-1.5 ${btnActive
+            ? 'bg-cyan text-black hover:bg-cyan-dim shadow-glow'
+            : 'bg-border text-text-muted cursor-not-allowed'
+            }`}
         >
           {isLoading ? (
             <>
@@ -182,6 +188,12 @@ export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, isLoadin
             Album link detected — press Enter or click Open
           </motion.p>
         )}
+        {mode === 'youtube-url' && (
+          <motion.p key="h-yt" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="text-[11px] text-rose/70 font-mono pl-1">
+            YouTube link detected — press Enter or click Import to match &amp; download
+          </motion.p>
+        )}
       </AnimatePresence>
     </div>
   );
@@ -190,7 +202,7 @@ export default function SearchBar({ onUrlFetch, onAlbumFetch, onSearch, isLoadin
 function SearchIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
@@ -198,8 +210,8 @@ function SearchIcon({ size = 16 }: { size?: number }) {
 function LinkIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   );
 }

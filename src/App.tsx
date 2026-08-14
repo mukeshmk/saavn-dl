@@ -20,6 +20,7 @@ import { DownloadQueueProvider } from './components/DownloadQueueContext';
 import { DownloadPrefsProvider } from './components/DownloadPrefsContext';
 import DownloadIndicator from './components/DownloadIndicator';
 import DownloadManagerPanel from './components/DownloadManagerPanel';
+import YouTubeImportModal from './components/YouTubeImportModal';
 import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail, ArtistSearchResult, ArtistDetail, PlaylistSearchResult, PlaylistDetail } from './types/saavn';
 import { searchSongs } from './utils/search';
 import { searchAlbums, fetchAlbumDetail } from './utils/album';
@@ -98,6 +99,8 @@ export default function App() {
   const [showDownloadPanel, setShowDownloadPanel] = useState(false);
   const [musicPathEnabled, setMusicPathEnabled] = useState(false);
   const [playlistsEnabled, setPlaylistsEnabled] = useState(false);
+  const [youtubeImportEnabled, setYoutubeImportEnabled] = useState(false);
+  const [ytImportUrl, setYtImportUrl] = useState<string | null>(null);
   const [downloadedIds, setDownloadedIds] = useState<DownloadedIds>({ tracks: [], albums: [] });
   const lastSongSearch = useRef<{ results: SearchResult[]; query: string } | null>(null);
   const lastAlbumSearch = useRef<{ results: AlbumSearchResult[]; query: string } | null>(null);
@@ -112,6 +115,7 @@ export default function App() {
     getConfig().then(cfg => {
       if (cfg?.musicPathEnabled) setMusicPathEnabled(true);
       if (cfg?.playlistsEnabled) setPlaylistsEnabled(true);
+      if (cfg?.youtubeImportEnabled) setYoutubeImportEnabled(true);
     });
   }, []);
 
@@ -332,6 +336,19 @@ export default function App() {
           <DownloadIndicator onClick={() => setShowDownloadPanel(true)} />
           {/* Download manager panel */}
           <DownloadManagerPanel isOpen={showDownloadPanel} onClose={() => setShowDownloadPanel(false)} />
+          {/* YouTube import modal */}
+          <AnimatePresence>
+            {ytImportUrl && (
+              <YouTubeImportModal
+                url={ytImportUrl}
+                onClose={() => setYtImportUrl(null)}
+                onComplete={() => {
+                  setYtImportUrl(null);
+                  setSection('playlists');
+                }}
+              />
+            )}
+          </AnimatePresence>
           {/* Ambient bg */}
           <div className="fixed inset-0 pointer-events-none">
             <div className="absolute inset-0 bg-mesh-cyan" />
@@ -398,6 +415,8 @@ export default function App() {
                   onUrlFetch={handleUrlFetch}
                   onAlbumFetch={handleAlbumFetch}
                   onSearch={handleSearch}
+                  onYoutubeImport={(url) => setYtImportUrl(url)}
+                  youtubeImportEnabled={youtubeImportEnabled}
                   isLoading={isAnyLoading}
                 />
               </motion.div>
