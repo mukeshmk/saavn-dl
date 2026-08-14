@@ -195,6 +195,11 @@ class DownloadWorker {
         isExplicit: song.isExplicit || false,
         filePath: savedPath,
       });
+
+      // YouTube-import jobs are tagged with a target playlist. Now that the track
+      // is recorded to history (so it exists in the `tracks` table), add it — this
+      // ordering matters: addTracksBySaavnId silently skips ids not yet in history.
+      await this.addToTargetPlaylist(job, song.id);
     } else {
       // Browser-delivery (direct): store an artifact for the browser to fetch.
       ctx.setProgress(96, 'Finalizing…');
@@ -215,6 +220,22 @@ class DownloadWorker {
         language: song.language || '',
         isExplicit: song.isExplicit || false,
       });
+    }
+  }
+
+  /**
+   * If a job was tagged with a target playlist (YouTube import), add the just-
+   * recorded track to it. Best-effort: a playlist-add failure must never fail
+   * the download. Lazy import avoids a static queue↔playlists dependency.
+   */
+  async addToTargetPlaylist(job, saavnId) {
+    if (!job.target_playlist_id) return;
+    try {
+      const { addTracksBySaavnId } = await import('../playlists/store.js');
+      addTracksBySaavnId(job.target_playlist_id, [saavnId]);
+      log.info('job %s: added %s to playlist %s', job.id, saavnId, job.target_playlist_id);
+    } catch (err) {
+      log.warn('job %s: playlist-add failed: %s', job.id, err.message);
     }
   }
 

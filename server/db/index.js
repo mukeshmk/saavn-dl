@@ -66,9 +66,25 @@ export function initDb() {
   db.pragma('foreign_keys = ON');
 
   createSchema(db);
+  migrateSchema(db);
 
   log.info('SQLite initialized at: %s', DB_PATH);
   return db;
+}
+
+// ─── Migrations ─────────────────────────────────────────────────────────────
+
+/**
+ * Idempotent, additive column migrations for tables created by an older build.
+ * (createSchema only runs CREATE TABLE IF NOT EXISTS, so pre-existing tables
+ * don't pick up new columns without this.)
+ */
+function migrateSchema(db) {
+  const cols = db.prepare('PRAGMA table_info(download_jobs)').all().map((c) => c.name);
+  if (!cols.includes('target_playlist_id')) {
+    db.exec("ALTER TABLE download_jobs ADD COLUMN target_playlist_id TEXT NOT NULL DEFAULT ''");
+    log.info('migrated: added download_jobs.target_playlist_id');
+  }
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────

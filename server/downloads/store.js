@@ -46,7 +46,7 @@ function nextPosition(db) {
  * @param {object} args { song, quality, mode, overrideMeta?, overrideFilename? }
  * @returns {string} job id
  */
-export function insertTrackJob({ song, quality, mode = 'direct', overrideMeta, overrideFilename }) {
+export function insertTrackJob({ song, quality, mode = 'direct', overrideMeta, overrideFilename, playlistId }) {
   const db = getDb();
   const id = `track-${song.id}-${Date.now()}`;
   const artist = getArtistTag(song);
@@ -55,9 +55,9 @@ export function insertTrackJob({ song, quality, mode = 'direct', overrideMeta, o
 
   db.prepare(
     `INSERT INTO download_jobs
-       (id, type, mode, status, title, artist, image, quality, payload, is_playlist, position, stage)
-     VALUES (?, 'track', ?, 'queued', ?, ?, ?, ?, ?, 0, ?, 'Queued')`,
-  ).run(id, mode, song.title || '', artist, song.image || '', String(quality), payload, nextPosition(db));
+       (id, type, mode, status, title, artist, image, quality, payload, is_playlist, position, stage, target_playlist_id)
+     VALUES (?, 'track', ?, 'queued', ?, ?, ?, ?, ?, 0, ?, 'Queued', ?)`,
+  ).run(id, mode, song.title || '', artist, song.image || '', String(quality), payload, nextPosition(db), playlistId || '');
 
   return id;
 }
