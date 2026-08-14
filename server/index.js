@@ -22,6 +22,8 @@ import { handleProxyRoute } from './proxy.js';
 import { initScheduler } from './library/sync-scheduler.js';
 import { backfillFilePaths } from './playlists/store.js';
 import { handleDownloadsRoute } from './downloads/routes.js';
+import { handleImportRoute } from './import/routes.js';
+import { probeYtdlp } from './import/ytdlp.js';
 import { createPlaylistFile } from './downloads/album.js';
 import { writeToLibrary } from './downloads/engine.js';
 import { probeFfmpeg } from './downloads/ffmpeg.js';
@@ -41,6 +43,9 @@ const FORCE_PROXY = process.env.SAAVN_FORCE_PROXY === 'true' || process.env.SAAV
 // Set once at startup after the ffmpeg probe (see startup()). Server-side downloads
 // require both a library destination and a working ffmpeg binary.
 let serverDownloadsEnabled = false;
+// Set once at startup after the yt-dlp probe. YouTube import needs a working
+// yt-dlp binary AND server-side downloads AND user playlists.
+let youtubeImportEnabled = false;
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -106,6 +111,7 @@ async function handleApiConfig(req, res) {
     dbPath: DB_PATH,
     forceProxy: FORCE_PROXY,
     serverDownloadsEnabled,
+    youtubeImportEnabled,
     // Surface the server's log level so the client logger can mirror debug mode.
     logLevel: getLogLevel(),
     debug: isDebugEnabled(),
@@ -319,6 +325,11 @@ const server = createServer(async (req, res) => {
       const handled = await handleDownloadsRoute(req, res, url, jsonResponse);
       if (handled !== false) return;
     }
+    // YouTube import routes (/api/import/*) — 403 inside the handler when disabled
+    if (url.pathname.startsWith('/api/import/')) {
+      const handled = await handleImportRoute(req, res, url, jsonResponse, { enabled: youtubeImportEnabled });
+      if (handled !== false) return;
+    }
 
     // Static files
     await serveStatic(req, res);
@@ -366,6 +377,16 @@ async function startup() {
   }
   serverDownloadsEnabled = !!LIBRARY_PATH && ffmpegAvailable;
 
+  // Probe yt-dlp to decide whether the YouTube import feature can run. It also
+  // requires server-side downloads (library + ffmpeg) and user playlists.
+  let ytdlpAvailable = false;
+  try {
+    ytdlpAvailable = await probeYtdlp();
+  } catch (err) {
+    log.warn('yt-dlp probe threw:', err.message);
+  }
+  youtubeImportEnabled = ytdlpAvailable && serverDownloadsEnabled;
+
   server.listen(PORT, () => {
     log.info('server running on port %d', PORT);
     log.info('log level: %s (set SAAVN_DEBUG=1 or SAAVN_LOG_LEVEL=debug for verbose logs)', getLogLevel());
@@ -400,6 +421,12 @@ async function startup() {
         'server-side downloads disabled — ffmpeg not available ' +
         '(install ffmpeg-static or set SAAVN_FFMPEG_PATH). Client will use the in-browser pipeline.',
       );
+    }
+
+    if (youtubeImportEnabled) {
+      log.info('YouTube import enabled (yt-dlp available)');
+    } else {
+      log.info('YouTube import disabled — needs yt-dlp + server-side downloads (library + ffmpeg)');
     }
 
     if (MUSIC_PATH) {
