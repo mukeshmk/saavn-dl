@@ -1,5 +1,23 @@
 [
   {
+    "id": 21,
+    "title": "Import a YouTube Playlist",
+    "date": "13-08-2026",
+    "content": "Self-hosted only. Paste a YouTube playlist, mix, or video URL into the search bar and saavn-dl extracts the track list and matches each song to JioSaavn. A review step lets you confirm, switch, or skip every match — refine any track's search (add the artist or album) to pull better candidates, and see an 'in library' badge for songs you already have. On confirm, a new playlist is created: tracks you already own are added instantly, and the rest download in the background and join the playlist as they finish. All extraction and matching run on the server (VPN-routed when behind Gluetun) — nothing contacts YouTube or JioSaavn from your browser. Requires the bundled yt-dlp binary plus server-side downloads (reported as youtubeImportEnabled); tune with SAAVN_YTDLP_PATH, SAAVN_YTDLP_PROXY, and SAAVN_IMPORT_MAX (default 100, which caps endless radio mixes). The review dialog and quality picker are responsive — the bitrate options collapse to a dropdown on mobile."
+  },
+  {
+    "id": 20,
+    "title": "Debug Logging & Log Levels",
+    "date": "07-08-2026",
+    "content": "Server logs now have levels — set SAAVN_LOG_LEVEL (error/warn/info/debug) or SAAVN_DEBUG=1 for verbose per-request tracing of proxy/VPN routing, downloads, syncs, and library writes. The browser client mirrors the server's level and can also be toggled from the devtools console with saavnDebug(true). Log lines are pipe-delimited and scoped for easy grepping."
+  },
+  {
+    "id": 19,
+    "title": "Faster VPN Proxy",
+    "date": "07-08-2026",
+    "content": "The self-hosted proxy is now noticeably faster over a VPN tunnel: it pools TCP/TLS connections (keep-alive) so repeat requests skip the handshake, requests upstream compression and forwards it untouched (smaller JSON payloads), and sets cache headers (7 days for images, 5 minutes for API responses) so repeat searches and Discover revisits are instant. Cover art now loads same-origin through the proxy, skipping an extra third-party image hop."
+  },
+  {
     "id": 18,
     "title": "Server-Side Downloads — Survive Tab Close & Restarts",
     "date": "29-07-2026",

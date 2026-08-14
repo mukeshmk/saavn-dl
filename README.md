@@ -22,6 +22,7 @@ Built with React 18, Vite, TypeScript, and TailwindCSS.
 - **Save to Library** — save tracks directly to a server-side directory (Artist/Album/Track structure)
 - **Library Sync** — stage downloads on a fast SSD and sync to NAS on a cron schedule
 - **Download History** — SQLite-backed history with "already downloaded" badges on search results
+- **YouTube import** (self-hosted) — paste a YouTube playlist/mix URL, review the auto-matched JioSaavn tracks, then download the missing ones into a new user playlist
 - **Full VPN proxy** — all external traffic (API calls + media downloads) routed server-side, compatible with Gluetun/WireGuard
 
 ---
@@ -91,19 +92,22 @@ The proxy keeps latency low over the tunnel: it pools TCP/TLS connections (keep-
 
 ## Environment Variables
 
-| Variable             | Default                | Description                                                                                                      |
-| -------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `SAAVN_LIBRARY_PATH` | _(empty)_              | Fast SSD staging directory. Empty = Save to Library disabled.                                                    |
-| `SAAVN_MUSIC_PATH`   | _(empty)_              | Permanent NAS directory. Empty = Library Sync disabled.                                                          |
-| `SAAVN_DB_PATH`      | `./data/saavn-dl.db`   | Path to SQLite database file (Docker default: `/data/saavn-dl.db`).                                              |
-| `SAAVN_FFMPEG_PATH`  | _(empty)_              | Override path to an ffmpeg binary for server-side downloads. Empty = use the bundled `ffmpeg-static`.            |
-| `SAAVN_ARTIFACT_DIR` | _(DB dir)_`/artifacts` | Where server-side browser-delivery files are held until the browser fetches them.                                |
-| `SAAVN_ARTIFACT_TTL` | `86400`                | Seconds to keep an unfetched browser-delivery artifact before cleanup (default 24h).                             |
-| `SAAVN_FORCE_PROXY`  | _(empty)_              | Set to `true` or `1` to prevent fallback to direct browser fetch. Requests fail if the VPN proxy is unreachable. |
-| `SAAVN_LOG_LEVEL`    | `info`                 | Server log verbosity: `error`, `warn`, `info`, or `debug`. Wins over `SAAVN_DEBUG` when set to a valid value.    |
-| `SAAVN_DEBUG`        | _(empty)_              | Set to `true` or `1` as a shortcut for `SAAVN_LOG_LEVEL=debug` (verbose per-request/per-track tracing).          |
-| `PORT`               | `80`                   | Server listen port.                                                                                              |
-| `STATIC_DIR`         | `./dist`               | Path to built frontend assets.                                                                                   |
+| Variable             | Default                | Description                                                                                                           |
+| -------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `SAAVN_LIBRARY_PATH` | _(empty)_              | Fast SSD staging directory. Empty = Save to Library disabled.                                                         |
+| `SAAVN_MUSIC_PATH`   | _(empty)_              | Permanent NAS directory. Empty = Library Sync disabled.                                                               |
+| `SAAVN_DB_PATH`      | `./data/saavn-dl.db`   | Path to SQLite database file (Docker default: `/data/saavn-dl.db`).                                                   |
+| `SAAVN_FFMPEG_PATH`  | _(empty)_              | Override path to an ffmpeg binary for server-side downloads. Empty = use the bundled `ffmpeg-static`.                 |
+| `SAAVN_ARTIFACT_DIR` | _(DB dir)_`/artifacts` | Where server-side browser-delivery files are held until the browser fetches them.                                     |
+| `SAAVN_ARTIFACT_TTL` | `86400`                | Seconds to keep an unfetched browser-delivery artifact before cleanup (default 24h).                                  |
+| `SAAVN_FORCE_PROXY`  | _(empty)_              | Set to `true` or `1` to prevent fallback to direct browser fetch. Requests fail if the VPN proxy is unreachable.      |
+| `SAAVN_YTDLP_PATH`   | _(empty)_              | Override path to a yt-dlp binary for YouTube import. Empty = `yt-dlp` on PATH (Docker sets `/usr/local/bin/yt-dlp`).  |
+| `SAAVN_YTDLP_PROXY`  | _(empty)_              | Optional HTTP/SOCKS proxy passed to yt-dlp as `--proxy`. Only needed for non-namespace proxy setups (see note below). |
+| `SAAVN_IMPORT_MAX`   | `100`                  | Max tracks extracted from a YouTube playlist/mix (bounds endless radio mixes). Capped at 500.                         |
+| `SAAVN_LOG_LEVEL`    | `info`                 | Server log verbosity: `error`, `warn`, `info`, or `debug`. Wins over `SAAVN_DEBUG` when set to a valid value.         |
+| `SAAVN_DEBUG`        | _(empty)_              | Set to `true` or `1` as a shortcut for `SAAVN_LOG_LEVEL=debug` (verbose per-request/per-track tracing).               |
+| `PORT`               | `80`                   | Server listen port.                                                                                                   |
+| `STATIC_DIR`         | `./dist`               | Path to built frontend assets.                                                                                        |
 
 ---
 
@@ -174,6 +178,25 @@ When self-hosted, the entire download pipeline (decrypt → fetch → ffmpeg met
 - **Requires ffmpeg** — bundled via `ffmpeg-static`; override with `SAAVN_FFMPEG_PATH` (e.g. an apt-installed `/usr/bin/ffmpeg`)
 
 Enabled automatically when `SAAVN_LIBRARY_PATH` is set **and** an ffmpeg binary is available; surfaced as `serverDownloadsEnabled` in `/api/config`. On static deployments (e.g. Vercel) where there is no server, downloads run in the browser exactly as before.
+
+---
+
+## YouTube Import (self-hosted)
+
+Paste a YouTube playlist, mix, or video URL (e.g. `https://www.youtube.com/watch?v=...&list=RD...`) into the search bar. The server extracts the track list with **yt-dlp**, matches each track to a JioSaavn song, and opens a **review** step where you confirm, switch, or skip each match. On confirm it creates a new user playlist: tracks already in your history are added immediately, and the rest are queued as server-side library downloads that join the playlist as they complete.
+
+- **All URL types** — including endless radio mixes (`list=RD…`), which yield a non-deterministic snapshot capped by `SAAVN_IMPORT_MAX` (default 100)
+- **Fuzzy matching** — the review step is the correctness backstop; unmatched tracks are skippable
+- **Self-hosted only** — gated by `youtubeImportEnabled` in `/api/config` (**yt-dlp available** AND server-side downloads AND user playlists). When any is missing, the search bar shows no import affordance and the endpoints return 403.
+
+### Network / VPN
+
+Every external call this feature makes egresses through the server: yt-dlp extraction/downloads, JioSaavn search, and song-detail fetch. Nothing runs as a browser fetch.
+
+- **Behind gluetun** (`network_mode: service:gluetun`, as in `docker-compose.yml`), the whole container — including the yt-dlp child process — shares the VPN network namespace, so **yt-dlp is VPN-routed by default** with gluetun's killswitch preventing leaks. No extra configuration is needed.
+- **Explicit-proxy setups** (no shared namespace): set `SAAVN_YTDLP_PROXY` to an HTTP/SOCKS proxy and it is passed to yt-dlp as `--proxy`. JioSaavn search + detail always go through the server-side allowlisted fetcher (honoring `SAAVN_FORCE_PROXY`).
+
+> **Note:** yt-dlp may break on YouTube changes and carries ToS/legal considerations. The Docker image bundles the standalone `yt-dlp_linux` binary at `/usr/local/bin/yt-dlp`; override with `SAAVN_YTDLP_PATH`.
 
 ---
 
