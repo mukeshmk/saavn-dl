@@ -23,6 +23,13 @@ const MAX_RESPONSE_BYTES = 200 * 1024 * 1024; // 200 MB
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+/** JioSaavn token from a bare token or a jiosaavn.com URL (last path segment, query/hash stripped). */
+export function saavnToken(tokenOrUrl) {
+  const s = String(tokenOrUrl || '').trim();
+  if (!s.includes('/')) return s;
+  return s.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() || '';
+}
+
 export class FetchError extends Error {
   constructor(message, { status } = {}) {
     super(message);

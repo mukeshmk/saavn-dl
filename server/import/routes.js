@@ -22,7 +22,7 @@
 
 import { fetchPlaylistEntries, isAllowedYoutubeUrl, IMPORT_MAX } from './ytdlp.js';
 import { matchEntry, searchCandidates } from './match.js';
-import { fetchAllowed } from '../downloads/fetcher.js';
+import { fetchAllowed, saavnToken } from '../downloads/fetcher.js';
 import { createPlaylist, addTracksBySaavnId } from '../playlists/store.js';
 import { getExistingTracks } from '../history/store.js';
 import { downloadWorker } from '../downloads/queue.js';
@@ -30,9 +30,9 @@ import { createLogger } from '../log.js';
 
 const log = createLogger('import/routes');
 
-// Mirrors SONG_API in src/App.tsx. Host (*.workers.dev) is on the shared
-// allowlist, so fetchAllowed reaches it over the VPN.
-const SONG_API = 'https://sda.rhythmax.workers.dev';
+// Mirrors fetchSongDetail in src/utils/search.ts (jiosaavn-api). Host
+// (*.vercel.app) is on the shared allowlist, so fetchAllowed reaches it over the VPN.
+const SONG_API = 'https://rthmx.vercel.app/api/song';
 
 const VALID_QUALITIES = new Set(['12', '48', '96', '160', '320']);
 const MAX_BODY_BYTES = 1 * 1024 * 1024; // small JSON payloads only
@@ -71,13 +71,18 @@ function parseJsonBody(req) {
 
 // ─── Song detail (VPN egress via fetchAllowed) ──────────────────────────────
 
-/** Fetch full song detail (incl. encrypted_media_url) by its JioSaavn perma_url. */
-async function fetchSongDetail(permaUrl, { signal } = {}) {
-  const buf = await fetchAllowed(`${SONG_API}/song?url=${encodeURIComponent(permaUrl)}`, { signal });
+/** Fetch full song detail (incl. encrypted_media_url) by JioSaavn token or perma_url. */
+async function fetchSongDetail(tokenOrUrl, { signal } = {}) {
+  const token = saavnToken(tokenOrUrl);
+  if (!token) throw new Error('Could not extract song token');
+  const buf = await fetchAllowed(`${SONG_API}?token=${encodeURIComponent(token)}`, { signal });
   const song = JSON.parse(buf.toString('utf-8'));
-  if (!song?.id || !song?.more_info?.encrypted_media_url) {
+  // The engine reads more_info.encrypted_media_url; lift a top-level one there.
+  const enc = song?.more_info?.encrypted_media_url || song?.encrypted_media_url;
+  if (!song?.id || !enc) {
     throw new Error('Song detail missing encrypted_media_url');
   }
+  song.more_info = { ...song.more_info, encrypted_media_url: enc };
   return song;
 }
 
@@ -246,7 +251,7 @@ export async function handleImportRoute(req, res, url, jsonResponse, { enabled =
     // Missing → fetch full detail server-side (VPN), then enqueue a library
     // download tagged with the playlist id (Task 4 adds it on completion).
     try {
-      const song = await d.fetchSongDetail(sel.permaUrl);
+      const song = await d.fetchSongDetail(sel.token || sel.permaUrl);
       d.enqueueTrack({ song, quality, mode: 'library', playlistId: playlist.id });
       queued++;
     } catch (err) {

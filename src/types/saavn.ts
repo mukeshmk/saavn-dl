@@ -24,6 +24,7 @@ export interface SaavnMoreInfo {
   release_date: string;
   vcode: string;
   vlink: string;
+  preview?: string;
 }
 
 export interface SaavnSong {
@@ -38,6 +39,7 @@ export interface SaavnSong {
   year: string;
   play_count: string;
   isExplicit: boolean;
+  encrypted_media_url?: string;
   more_info: SaavnMoreInfo;
 }
 
@@ -110,6 +112,13 @@ export function asResultsArray<T>(data: unknown, keys: string[] = ['results']): 
   return [];
 }
 
+/** JioSaavn token from a bare token or a jiosaavn.com URL (last path segment, query/hash stripped). */
+export function saavnToken(tokenOrUrl: string): string {
+  const s = tokenOrUrl.trim();
+  if (!s.includes('/')) return s;
+  return s.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() || '';
+}
+
 export function formatDuration(sec?: string) {
   if (!sec) return '';
 
@@ -130,7 +139,7 @@ export function formatDuration(sec?: string) {
  * Routing mirrors proxyFetch's strategy: when a server is present, images go
  * through our own same-origin /api/proxy so they ride the same VPN path as
  * every other request (and pick up its keep-alive + 7-day image cache). This
- * skips the third-party rthmx.vercel.app/api/image hop entirely — that hop was
+ * skips the third-party rthmx.vercel.app/api/media hop entirely — that hop was
  * just passing the already-sized image through, adding a cold-start-prone
  * round trip for no benefit. Same-origin also sidesteps COEP: require-corp,
  * so no crossOrigin attributes are needed.
@@ -138,7 +147,7 @@ export function formatDuration(sec?: string) {
  * On static deployments (no server) we fall back to the jiosaavn-api image
  * proxy, which sends the CORP header the browser needs under COEP.
  */
-const IMAGE_FALLBACK_PROXY = 'https://rthmx.vercel.app/api/image';
+const IMAGE_FALLBACK_PROXY = 'https://rthmx.vercel.app/api/media';
 // Default jiosaavn-api instance. Replace with your own if you self-host it.
 
 // True once /api/config confirms a server is present. The <img> src builders

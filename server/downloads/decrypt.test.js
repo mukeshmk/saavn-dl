@@ -36,6 +36,25 @@ test('decryptMediaUrl tolerates unpadded base64 input', () => {
   assert.equal(decryptMediaUrl(encrypted), original);
 });
 
+test('decryptMediaUrl normalizes URL-safe base64 and surrounding whitespace', () => {
+  const original = 'https://aac.saavncdn.com/777/cafebabe0123456789abcdef_320.mp4';
+  const urlSafe = encryptMediaUrl(original).replace(/\+/g, '-').replace(/\//g, '_');
+  assert.equal(decryptMediaUrl(` ${urlSafe}\n`), original);
+});
+
+test('decryptMediaUrl rejects base64 whose length is 1 mod 4', () => {
+  assert.throws(() => decryptMediaUrl('abcde'), /Invalid encrypted media URL encoding/);
+});
+
+test('decryptMediaUrl rejects invalid PKCS padding', () => {
+  // 16 bytes, no padding block: last byte 'p' (112) is not a valid pad length.
+  const bad = CryptoJS.DES.encrypt(CryptoJS.enc.Latin1.parse('abcdefghijklmnop'), DES_KEY, {
+    mode: CryptoJS.mode.ECB,
+    padding: CryptoJS.pad.NoPadding,
+  }).toString();
+  assert.throws(() => decryptMediaUrl(bad), /Invalid decrypted media URL padding/);
+});
+
 test('getQualityUrl swaps the quality suffix', () => {
   assert.equal(
     getQualityUrl('https://aac.saavncdn.com/x/song_96.mp4', '320'),

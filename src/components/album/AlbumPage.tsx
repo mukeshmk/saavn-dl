@@ -317,8 +317,8 @@ function TrackRow({ song, index, quality, isExpanded, onToggle, isDownloaded }: 
             <div className="px-3 pb-3 space-y-3">
               <div className="h-px bg-border" />
               {/* Preview */}
-              {song.more_info?.vlink && (
-                <AudioPreview vlink={song.more_info.vlink} title={song.title} />
+              {song.more_info?.preview && (
+                <AudioPreview vlink={song.more_info.preview} title={song.title} />
               )}
               {/* Edit Meta + Download */}
               <div className="flex items-center gap-2">
