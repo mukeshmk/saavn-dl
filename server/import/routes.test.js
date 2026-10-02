@@ -13,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { handleImportRoute } from './routes.js';
+import { saavnToken } from '../downloads/fetcher.js';
 
 /** Build a fake POST request whose body is the given JSON object. */
 function fakeReq(bodyObj) {
@@ -100,11 +101,12 @@ test('commit adds in-history tracks now and enqueues missing ones', async () => 
   const { calls, jsonResponse, res } = captureResponse();
   const added = [];
   const enqueued = [];
+  const fetched = [];
   const deps = {
     createPlaylist: ({ name }) => ({ id: 'pl1', name }),
     getExistingTracks: () => ({ A: { exists: true, filePath: 'x.m4a' } }),
     addTracksBySaavnId: (pid, ids) => { added.push({ pid, ids }); },
-    fetchSongDetail: async () => ({ id: 'B', more_info: { encrypted_media_url: 'enc' } }),
+    fetchSongDetail: async (ref) => { fetched.push(ref); return { id: 'B', more_info: { encrypted_media_url: 'enc' } }; },
     enqueueTrack: (args) => { enqueued.push(args); return 'job-1'; },
   };
 
@@ -114,7 +116,7 @@ test('commit adds in-history tracks now and enqueues missing ones', async () => 
       quality: '320',
       selections: [
         { saavnId: 'A', permaUrl: 'https://jiosaavn.com/song/a/A' },
-        { saavnId: 'B', permaUrl: 'https://jiosaavn.com/song/b/B' },
+        { saavnId: 'B', token: 'Btok', permaUrl: 'https://jiosaavn.com/song/b/B' },
       ],
     }),
     res, urlFor('/api/import/commit'), jsonResponse, { enabled: true, deps },
@@ -134,6 +136,15 @@ test('commit adds in-history tracks now and enqueues missing ones', async () => 
   assert.equal(enqueued[0].mode, 'library');
   assert.equal(enqueued[0].playlistId, 'pl1');
   assert.equal(enqueued[0].song.id, 'B');
+  // song detail is fetched by the candidate's token (not the perma_url)
+  assert.deepEqual(fetched, ['Btok']);
+});
+
+test('saavnToken derives the token from a bare token or a JioSaavn URL', () => {
+  assert.equal(saavnToken('https://www.jiosaavn.com/song/tum-hi-ho/EToxUyFpcwQ?x=1'), 'EToxUyFpcwQ');
+  assert.equal(saavnToken('https://www.jiosaavn.com/album/aashiqui-2/-iNdCmFNV9o_/'), '-iNdCmFNV9o_');
+  assert.equal(saavnToken('EToxUyFpcwQ'), 'EToxUyFpcwQ');
+  assert.equal(saavnToken(''), '');
 });
 
 test('commit returns 409 on a duplicate playlist name', async () => {

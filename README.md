@@ -80,7 +80,7 @@ docker run -p 8080:80 \
 
 ### Running behind a VPN (Gluetun)
 
-When self-hosted, **all external traffic** is routed through `/api/proxy` — this includes search/metadata API calls (`rthmx.vercel.app`, `sda.rhythmax.workers.dev`) as well as audio and cover art CDN fetches. Running behind [Gluetun](https://github.com/qdm12/gluetun) means every outbound request goes through the VPN tunnel while the browser only talks to your server.
+When self-hosted, **all external traffic** is routed through `/api/proxy` — this includes search/metadata API calls (`rthmx.vercel.app`) as well as audio and cover art CDN fetches. Running behind [Gluetun](https://github.com/qdm12/gluetun) means every outbound request goes through the VPN tunnel while the browser only talks to your server.
 
 A ready-to-use `docker-compose.yml` is included in the repository with Gluetun (Surfshark/WireGuard) + saavn-dl configured with VPN routing, Library Sync, and persistent SQLite storage. See [`docker-compose.yml`](./docker-compose.yml) for the full setup.
 

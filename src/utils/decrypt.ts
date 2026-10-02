@@ -3,23 +3,32 @@ import CryptoJS from 'crypto-js';
 const DES_KEY = CryptoJS.enc.Utf8.parse('38346591');
 
 /**
- * Decrypts a JioSaavn encrypted_media_url using DES ECB PKCS7
+ * Decrypts a JioSaavn encrypted_media_url using DES ECB PKCS7.
+ * Normalizes the base64 input (whitespace, URL-safe alphabet, padding) and
+ * validates the PKCS padding explicitly instead of trusting auto-unpad.
  */
 export function decryptMediaUrl(encrypted: string): string {
-  // Pad base64 string if needed
-  const padLen = (4 - (encrypted.length % 4)) % 4;
-  const padded = encrypted + '='.repeat(padLen);
+  // Normalize: trim, strip whitespace, URL-safe → standard alphabet, re-pad.
+  let normalized = encrypted.trim().replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+  if (normalized.length % 4 === 1) throw new Error('Invalid encrypted media URL encoding');
+  normalized += '='.repeat((4 - (normalized.length % 4)) % 4);
 
   const cipherParams = CryptoJS.lib.CipherParams.create({
-    ciphertext: CryptoJS.enc.Base64.parse(padded),
+    ciphertext: CryptoJS.enc.Base64.parse(normalized),
   });
 
-  const decrypted = CryptoJS.DES.decrypt(cipherParams, DES_KEY, {
+  // Decrypt without auto-unpadding so the PKCS padding can be validated.
+  const plain = CryptoJS.DES.decrypt(cipherParams, DES_KEY, {
     mode: CryptoJS.mode.ECB,
-    padding: CryptoJS.pad.Pkcs7,
-  });
+    padding: CryptoJS.pad.NoPadding,
+  }).toString(CryptoJS.enc.Latin1);
 
-  return decrypted.toString(CryptoJS.enc.Utf8);
+  // Negated form also rejects NaN from an empty plaintext.
+  const paddingLength = plain.charCodeAt(plain.length - 1);
+  if (!(paddingLength >= 1 && paddingLength <= 8 && paddingLength <= plain.length)) {
+    throw new Error('Invalid decrypted media URL padding');
+  }
+  return plain.slice(0, -paddingLength);
 }
 
 /**

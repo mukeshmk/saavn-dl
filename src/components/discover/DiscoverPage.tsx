@@ -6,7 +6,7 @@ import { fetchHomeFeed, fetchNewReleases, fetchRelatedAlbums, fetchArtistPlaylis
 import type { HomeFeedSection, DiscoverAlbum, DiscoverPlaylist } from '../../utils/discover';
 import { fetchPlaylistDetail } from '../../utils/playlist';
 import { fetchAlbumDetail } from '../../utils/album';
-import { proxyFetch } from '../../utils/proxy';
+import { fetchSongDetail } from '../../utils/search';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('discover');
@@ -93,16 +93,12 @@ export default function DiscoverPage({
     try {
       // If the item is a song (single track), try fetching as a song first
       if (item.type === 'song' && onSongSelect) {
-        const SONG_API = 'https://sda.rhythmax.workers.dev';
-        const resp = await proxyFetch(`${SONG_API}/song?url=${encodeURIComponent(url)}`);
-        if (resp.ok) {
-          const song = await resp.json();
-          if (song?.id && song?.more_info?.encrypted_media_url) {
-            onSongSelect(song);
-            return;
-          }
+        try {
+          onSongSelect(await fetchSongDetail(item.token || url));
+          return;
+        } catch {
+          // If song fetch fails, try as album (some singles are listed as albums)
         }
-        // If song fetch fails, try as album (some singles are listed as albums)
       }
       const detail = await fetchAlbumDetail(url);
       onAlbumSelect(detail);

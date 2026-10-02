@@ -22,19 +22,13 @@ import DownloadIndicator from './components/DownloadIndicator';
 import DownloadManagerPanel from './components/DownloadManagerPanel';
 import YouTubeImportModal from './components/YouTubeImportModal';
 import type { SaavnSong, SearchResult, AlbumSearchResult, AlbumDetail, ArtistSearchResult, ArtistDetail, PlaylistSearchResult, PlaylistDetail } from './types/saavn';
-import { searchSongs } from './utils/search';
+import { searchSongs, fetchSongDetail } from './utils/search';
 import { searchAlbums, fetchAlbumDetail } from './utils/album';
 import { searchArtists, fetchArtistDetail } from './utils/artist';
 import { searchPlaylists, fetchPlaylistDetail } from './utils/playlist';
 import { getDownloadedIds } from './utils/history';
 import type { DownloadedIds } from './utils/history';
 import { getConfig } from './utils/config';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const SONG_API = 'https://sda.rhythmax.workers.dev';
-// Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
-// Visit https://github.com/ODSkyler/saavn-dl-api for more information.
 
 // ─── Top-level section ────────────────────────────────────────────────────────
 
@@ -72,17 +66,6 @@ type View =
   | { type: 'playlist'; playlist: PlaylistDetail; fromSearch: boolean }
   // ── Errors ──
   | { type: 'error'; message: string; context: 'url' | 'search' };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function fetchSong(url: string): Promise<SaavnSong> {
-  const resp = await fetch(`${SONG_API}/song?url=${encodeURIComponent(url)}`);
-  if (!resp.ok) throw new Error((await resp.text().catch(() => '')) || `HTTP ${resp.status}`);
-  const data: SaavnSong = await resp.json();
-  if (!data?.id || !data?.more_info?.encrypted_media_url)
-    throw new Error('Invalid response — missing required fields');
-  return data;
-}
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
@@ -130,7 +113,7 @@ export default function App() {
     setView({ type: 'fetching-song' });
     setSearchError('');
     try {
-      const song = await fetchSong(url);
+      const song = await fetchSongDetail(url);
       setView({ type: 'track', song, fromSearch: false });
     } catch (err) {
       setView({ type: 'error', message: err instanceof Error ? err.message : 'Fetch failed', context: 'url' });
@@ -210,7 +193,7 @@ export default function App() {
     setView({ type: 'fetching-song-result', results: currentResults, query: currentQuery, fetchingId: result.id });
     setSearchError('');
     try {
-      const song = await fetchSong(result.perma_url);
+      const song = await fetchSongDetail(result.token || result.perma_url);
       setView({ type: 'track', song, fromSearch: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load song';
@@ -227,7 +210,7 @@ export default function App() {
     setView({ type: 'fetching-album-result', results: currentResults, query: currentQuery, fetchingId: result.id });
     setSearchError('');
     try {
-      const album = await fetchAlbumDetail(result.perma_url);
+      const album = await fetchAlbumDetail(result.token || result.perma_url);
       setView({ type: 'album', album, fromSearch: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load album';

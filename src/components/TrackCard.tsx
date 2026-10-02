@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SaavnSong, Quality } from '../types/saavn';
-import { getSongArtist } from '../types/saavn';
+import { getSongArtist, proxyImage } from '../types/saavn';
 import AudioPreview from './AudioPreview';
 import QualitySelector from './QualitySelector';
 import DownloadAction from './DownloadAction';
@@ -33,10 +33,7 @@ export default function TrackCard({ song, onDownloadSuccess }: TrackCardProps) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const { more_info } = song;
-  const imageUrl =
-    `https://sda.rhythmax.workers.dev/image?url=${encodeURIComponent(song.image)}`;
-  // Defalut API (sda.rhythmax.workers.dev). Replace with your saavn-dl-api instance.
-  // Visit https://github.com/ODSkyler/saavn-dl-api for more information.
+  const imageUrl = proxyImage(song.image);
   const [showMetadataEditor, setShowMetadataEditor] = useState(false);
   const [originalMeta, setOriginalMeta] = useState<TrackMetadata | null>(null);
   const [editedMeta, setEditedMeta] = useState<TrackMetadata | null>(null);

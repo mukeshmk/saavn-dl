@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { getDb } from '../db/index.js';
-import { fetchAllowed } from './fetcher.js';
+import { fetchAllowed, saavnToken } from './fetcher.js';
 import { sanitizeFilename, sanitizePathSegment } from './decrypt.js';
 import { processTrack, writeToLibrary, getArtistTag } from './engine.js';
 import { recordTrack } from './recorder.js';
@@ -27,7 +27,8 @@ const log = createLogger('downloads/album');
 
 const LIBRARY_PATH = process.env.SAAVN_LIBRARY_PATH || '';
 const MUSIC_PATH = process.env.SAAVN_MUSIC_PATH || '';
-const DETAIL_API = 'https://sda.rhythmax.workers.dev/album';
+// jiosaavn-api album detail by token (mirrors fetchAlbumDetail in src/utils/album.ts).
+const DETAIL_API = 'https://rthmx.vercel.app/api/album';
 
 // ─── Naming helpers (single source for on-disk folder + file names) ──────────
 
@@ -76,23 +77,23 @@ export function detectMultiArtist(album) {
 export async function resolveAlbumArtists(songs, signal) {
   const map = new Map();
 
-  const albumUrls = new Map();
+  const albumTokens = new Map();
   for (const song of songs) {
     const albumId = song.more_info?.album_id;
-    const albumUrl = song.more_info?.album_url;
-    if (albumId && albumUrl && !albumUrls.has(albumId)) albumUrls.set(albumId, albumUrl);
+    const token = song.more_info?.album_token || saavnToken(song.more_info?.album_url || '');
+    if (albumId && token && !albumTokens.has(albumId)) albumTokens.set(albumId, token);
   }
 
-  const entries = [...albumUrls.entries()];
+  const entries = [...albumTokens.entries()];
   const BATCH_SIZE = 5;
 
   for (let batch = 0; batch < entries.length; batch += BATCH_SIZE) {
     if (signal?.aborted) break;
     const chunk = entries.slice(batch, batch + BATCH_SIZE);
     const results = await Promise.allSettled(
-      chunk.map(async ([albumId, albumUrl]) => {
+      chunk.map(async ([albumId, token]) => {
         try {
-          const buf = await fetchAllowed(`${DETAIL_API}?url=${encodeURIComponent(albumUrl)}`, { signal });
+          const buf = await fetchAllowed(`${DETAIL_API}?token=${encodeURIComponent(token)}`, { signal });
           const detail = JSON.parse(buf.toString('utf-8'));
           if (!detail?.id) return null;
 

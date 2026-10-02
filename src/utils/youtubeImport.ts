@@ -48,6 +48,7 @@ export interface ImportPreview {
 
 export interface CommitSelection {
   saavnId: string;
+  token?: string;
   permaUrl: string;
   title: string;
   artist: string;

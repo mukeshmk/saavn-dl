@@ -215,6 +215,13 @@ export interface TrackBlobOptions {
   scope?: string;
 }
 
+/** Encrypted URL lives top-level on some API shapes and under more_info on others. */
+function getEncryptedMediaUrl(song: SaavnSong): string {
+  const enc = song.encrypted_media_url || song.more_info?.encrypted_media_url;
+  if (!enc) throw new Error('Missing encrypted media URL');
+  return enc;
+}
+
 /**
  * Core single-track pipeline: decrypt → fetch audio + cover → embed metadata
  * with ffmpeg → return the finished M4A as a Blob (no browser download).
@@ -226,7 +233,7 @@ export async function trackToBlob(song: SaavnSong, opts: TrackBlobOptions): Prom
 
   log.debug('trackToBlob "%s" @ %skbps (in-browser pipeline)', song.title, quality);
   onProgress?.('Decrypting URL…', 8);
-  const decrypted = decryptMediaUrl(more_info.encrypted_media_url);
+  const decrypted = decryptMediaUrl(getEncryptedMediaUrl(song));
   const audioUrl = getQualityUrl(decrypted, quality);
 
   onProgress?.('Fetching audio…', 18);
@@ -287,7 +294,7 @@ export async function trackToBlob(song: SaavnSong, opts: TrackBlobOptions): Prom
 
 /** Fetch the raw audio stream as a Blob with no ffmpeg processing / metadata. */
 export async function trackToBlobDirect(song: SaavnSong, quality: string): Promise<Blob> {
-  const decrypted = decryptMediaUrl(song.more_info.encrypted_media_url);
+  const decrypted = decryptMediaUrl(getEncryptedMediaUrl(song));
   const audioUrl = getQualityUrl(decrypted, quality);
   const resp = await proxyFetch(audioUrl);
   if (!resp.ok) throw new Error(`Audio fetch failed: HTTP ${resp.status}`);

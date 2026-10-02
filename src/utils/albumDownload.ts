@@ -3,7 +3,7 @@ import type { SaavnSong, AlbumDetail } from '../types/saavn';
 import { getSongArtist } from '../types/saavn';
 import { sanitizeFilename } from './decrypt';
 import { trackToBlob, triggerDownload } from './download';
-import { proxyFetch } from './proxy';
+import { fetchAlbumDetail } from './album';
 import { recordDownload } from './history';
 import { getConfig } from './config';
 import { createLogger } from './logger';
@@ -435,8 +435,6 @@ interface AlbumArtistInfo {
   year: string;
 }
 
-const DETAIL_API = 'https://sda.rhythmax.workers.dev/album';
-
 /**
  * Fetches album details for each unique album_id in the playlist to resolve
  * the correct album artist. This ensures tracks land in the same folder as
@@ -447,29 +445,26 @@ const DETAIL_API = 'https://sda.rhythmax.workers.dev/album';
 async function resolveAlbumArtists(songs: SaavnSong[]): Promise<Map<string, AlbumArtistInfo>> {
   const map = new Map<string, AlbumArtistInfo>();
 
-  // Collect unique album URLs keyed by album_id
-  const albumUrls = new Map<string, string>();
+  // Collect a unique album token (or URL to derive it from) keyed by album_id
+  const albumRefs = new Map<string, string>();
   for (const song of songs) {
     const albumId = song.more_info?.album_id;
-    const albumUrl = song.more_info?.album_url;
-    if (albumId && albumUrl && !albumUrls.has(albumId)) {
-      albumUrls.set(albumId, albumUrl);
+    const ref = song.more_info?.album_token || song.more_info?.album_url;
+    if (albumId && ref && !albumRefs.has(albumId)) {
+      albumRefs.set(albumId, ref);
     }
   }
 
   // Fetch album details in parallel (batches of 5 to avoid hammering the API)
-  const entries = [...albumUrls.entries()];
+  const entries = [...albumRefs.entries()];
   const BATCH_SIZE = 5;
 
   for (let batch = 0; batch < entries.length; batch += BATCH_SIZE) {
     const chunk = entries.slice(batch, batch + BATCH_SIZE);
     const results = await Promise.allSettled(
-      chunk.map(async ([albumId, albumUrl]) => {
+      chunk.map(async ([albumId, ref]) => {
         try {
-          const res = await proxyFetch(`${DETAIL_API}?url=${encodeURIComponent(albumUrl)}`);
-          if (!res.ok) return null;
-          const detail: AlbumDetail = await res.json();
-          if (!detail?.id) return null;
+          const detail = await fetchAlbumDetail(ref);
 
           // Determine album artist using the same logic as downloadAlbumLibrary
           let albumArtist: string;

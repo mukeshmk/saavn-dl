@@ -119,6 +119,7 @@ export default function YouTubeImportModal({ url, onClose, onComplete }: YouTube
       if (!cand) return;
       selections.push({
         saavnId: cand.id,
+        token: cand.token,
         permaUrl: cand.perma_url,
         title: cand.title,
         artist: extractArtistFromSubtitle(cand.subtitle),
